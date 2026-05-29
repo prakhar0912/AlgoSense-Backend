@@ -1,3 +1,4 @@
+import type User from "../../entities/user.js";
 import type UserScores from "../../entities/userScores.js";
 import InternalServerError from "../../errors/internalServerError.js";
 import type IUseCase from "../../interfaces/useCase.js";
@@ -7,14 +8,13 @@ export default class UpdateUserScore implements IUseCase<Partial<UserScores>> {
     constructor(
         private userDAO: IUserDAO
     ) { }
-    async call(userId: string, approachScore: number, problemDifficulty: number, edgeCaseScore: number): Promise<Partial<UserScores>> {
+    async call(userId: string, userScores: UserScores, approachScore: number, problemDifficulty: number, edgeCaseScore: number): Promise<Partial<UserScores>> {
         if (!approachScore) {
             throw new InternalServerError('Approach Score not sent')
         }
         if (!edgeCaseScore) {
             throw new InternalServerError('Approach Score not sent')
         }
-        const userScores = await this.userDAO.getUserScores(userId)
         const maxPossibleScore = 10
         let mergedApproachScore = 0
         let mergedEdgeCaseScore = 0

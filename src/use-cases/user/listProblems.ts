@@ -11,6 +11,6 @@ export default class ListProblems implements IUseCase<IPaginated<Problem>> {
         private problemDAO: IProblemDAO,
     ) { }
     async call(page: number = 1, perPage: number = 10): Promise<IPaginated<Problem>> {
-        return await this.problemDAO.findAll({}, page, perPage)
+        return await this.problemDAO.list({}, page, perPage)
     }
 }

@@ -16,6 +16,6 @@ export default class Problem {
             case: string
             importance: number
         }
-    }[] | []
+    }[]
     evaluation_criteria!: string[]
 }

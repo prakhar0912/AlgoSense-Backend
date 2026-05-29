@@ -10,7 +10,7 @@ export default class User {
     banned!: boolean
     scores?: UserScores | null
     created_at!: Date
-    submissions?: Submission[] | []
+    submissions?: Submission[] | null
     email_verified!: boolean
     email_notifications_enabled!: boolean
 }

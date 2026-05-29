@@ -18,7 +18,7 @@ export default class RegisterUser implements IUseCase<ILoginResponse> {
         if (!validationResult.success || !validationResult.data) {
             throw new ValidationError('Invalid user registration data', validationResult.errors)
         }
-        const { email, password, first_name, last_name, email_notifications_enabled } = payload
+        const { email, password, first_name, last_name, email_notifications_enabled } = validationResult.data
         const existingUser = await this.userDAO.findByEmail(email)
         if (existingUser) {
             throw new ValidationError('Email is already in use', [{ path: ['email'], message: 'Email is already in use' }])

@@ -9,8 +9,7 @@ export default class UpdateConsistencyScore implements IUseCase<Partial<UserScor
         private firstLoginToday: (daysLoggedIn: string[]) => boolean,
         private getConsistencyScore: (daysLoggedIn: string[]) => number
     ) { }
-    async call(userId: string): Promise<Partial<UserScores>> {
-        const userScores = await this.userDAO.getUserScores(userId)
+    async call(userId: string, userScores: UserScores): Promise<Partial<UserScores>> {
         let daysLoggedIn = userScores ? userScores.days_logged_in : []
         if (!userScores) {
             daysLoggedIn.push(new Date().toISOString())
