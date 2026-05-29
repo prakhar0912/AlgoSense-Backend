@@ -13,12 +13,12 @@ export default class RegisterUser implements IUseCase<ILoginResponse> {
         private hashPassword: (password: string) => Promise<{ salt: string; hashedPassword: string }>,
         private generateToken: (userId: string) => string
     ) { }
-    async call(payload: Pick<AuthUser, "email" | "password" | "firstName" | "lastName" | "emailNotificationsEnabled">): Promise<ILoginResponse> {
+    async call(payload: Pick<AuthUser, "email" | "password" | "first_name" | "last_name" | "email_notifications_enabled">): Promise<ILoginResponse> {
         const validationResult = this.validateUserRegistration.validate(payload)
         if (!validationResult.success || !validationResult.data) {
             throw new ValidationError('Invalid user registration data', validationResult.errors)
         }
-        const { email, password, firstName, lastName, emailNotificationsEnabled } = payload
+        const { email, password, first_name, last_name, email_notifications_enabled } = payload
         const existingUser = await this.userDAO.findByEmail(email)
         if (existingUser) {
             throw new ValidationError('Email is already in use', [{ path: ['email'], message: 'Email is already in use' }])
@@ -27,15 +27,15 @@ export default class RegisterUser implements IUseCase<ILoginResponse> {
         try {
             const newUser = await this.userDAO.create({
                 email,
-                firstName,
-                lastName,
-                emailNotificationsEnabled,
+                first_name,
+                last_name,
+                email_notifications_enabled,
                 password: hashedPassword,
                 salt,
                 role: 'user',
                 banned: false,
-                createdAt: new Date(),
-                emailVerified: false,
+                created_at: new Date(),
+                email_verified: false,
             })
             const token = this.generateToken(newUser.id)
             return {

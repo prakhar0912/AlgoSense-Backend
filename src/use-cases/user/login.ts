@@ -18,9 +18,9 @@ export default class Login implements IUseCase<ILoginResponse> {
         const passwordsMatch = user ? await this.compareWithHashedPassword(password, user.password) : false
 
         if (user && passwordsMatch) {
-            const { id, firstName, lastName, email, role } = user
+            const { id, first_name, last_name, email, role } = user
             return {
-                user: { id, firstName, lastName, email, role },
+                user: { id, first_name, last_name, email, role },
                 token: await this.generateToken(user.id),
             }
         } else {

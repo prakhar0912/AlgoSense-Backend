@@ -4,13 +4,13 @@ import UserScores from "./userScores.js"
 export default class User {
     id!: string
     email!: string
-    firstName!: string
-    lastName!: string
+    first_name!: string
+    last_name!: string
     role!: 'admin' | 'user'
     banned!: boolean
     scores?: UserScores | null
-    createdAt!: Date
+    created_at!: Date
     submissions?: Submission[] | []
-    emailVerified!: boolean
-    emailNotificationsEnabled!: boolean
+    email_verified!: boolean
+    email_notifications_enabled!: boolean
 }

@@ -14,7 +14,7 @@ export default interface IUserDAO {
     banUser(userId: string): Promise<User>
     unbanUser(userId: string): Promise<User>
     getUserScores(userId: string): Promise<User['scores']>
-    setUserScores(userId: string, scores: UserScores): Promise<User['scores']>
+    setUserScores(userId: string, scores: Partial<UserScores>): Promise<UserScores>
     getUserSubmissions(userId: string): Promise<User['submissions']>
     getLast5Submissions(userId: string): Promise<User['submissions']>
     answer(answerData: Partial<Submission>): Promise<Submission>

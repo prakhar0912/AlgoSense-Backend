@@ -1,15 +1,16 @@
 
 export default class Submission {
     id!: string
-    userId!: string
-    problemId!: string
-    userInput!: string
+    user_id!: string
+    problem_id!: string
+    difficulty!: number
+    user_input!: string
     timer?: number | null
-    approachScore?: number
-    identifiedApproach!: string | ""
+    approach_score?: number
+    identified_approach!: string | ""
     pass!: boolean
-    missingPoints!: string[] | []
-    edgeCasesMissed!: string[] | []
-    edgeCaseScore!: number
-    submittedAt!: Date
+    missing_points!: string[] | []
+    edge_cases_missed!: string[] | []
+    edge_case_score!: number
+    submitted_at!: string
 }
