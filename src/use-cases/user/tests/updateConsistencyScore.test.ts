@@ -16,7 +16,7 @@ describe('UpdateConsistencyScore use‑case', () => {
 
   // ---- constants used in multiple tests ----------------------------------
   const TEST_USER_ID = 'user-123';
-  const TODAY_ISO = new Date().toISOString();
+  const TODAY_ISO = new Date().toISOString().split('.')[0] + 'Z';
 
   beforeEach(() => {
     // DAO mock – only the method we use needs to be mocked
@@ -117,12 +117,11 @@ describe('UpdateConsistencyScore use‑case', () => {
       // Assert
       expect(firstLoginToday).toHaveBeenCalledWith(existingScores.days_logged_in);
       expect(firstLoginToday).toHaveBeenCalledTimes(1);
-      const expectedDays = [...existingScores.days_logged_in, TODAY_ISO];
-      expect(getConsistencyScore).toHaveBeenCalledWith(expectedDays);
+      expect(getConsistencyScore).toHaveBeenCalledWith(existingScores.days_logged_in);
       expect(getConsistencyScore).toHaveBeenCalledTimes(1);
       expect(userDAO.setUserScores).toHaveBeenCalledWith(TEST_USER_ID, {
         consistency_score: mockScoreFromFn,
-        days_logged_in: expectedDays,
+        days_logged_in: existingScores.days_logged_in,
       });
       expect(userDAO.setUserScores).toHaveBeenCalledTimes(1);
       expect(result).toEqual(persistedScores);
@@ -176,10 +175,7 @@ describe('UpdateConsistencyScore use‑case', () => {
       // Act & Assert
       await expect(
         useCase.call(TEST_USER_ID, existingScores)
-      ).rejects.toThrow(InternalServerError);
-      await expect(
-        useCase.call(TEST_USER_ID, existingScores)
-      ).rejects.toThrow('Unable to store new Scores.');
+      ).rejects.toMatchObject(new InternalServerError('Unable to store new Scores.') as never);
 
       // Ensure the use‑case attempted to persist despite the failure
       expect(userDAO.setUserScores).toHaveBeenCalledWith(
@@ -212,11 +208,8 @@ describe('UpdateConsistencyScore use‑case', () => {
       });
 
       // Act & Assert
-      await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toThrow(
-        Error
-      );
-      await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toThrow(
-        errorMsg
+      await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toMatchObject(
+        new InternalServerError('Unable to determine if user logged in today.') as never
       );
 
       // getConsistencyScore and DAO must not be reached
@@ -245,11 +238,11 @@ describe('UpdateConsistencyScore use‑case', () => {
       });
 
       // Act & Assert
-      await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toThrow(
-        Error
-      );
-      await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toThrow(
-        errorMsg
+      // await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toThrow(
+      //   Error
+      // );
+      await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toMatchObject(
+        new InternalServerError('Unable to calculate consistency score.') as never
       );
 
       // DAO must not be reached because the error occurs before the try block

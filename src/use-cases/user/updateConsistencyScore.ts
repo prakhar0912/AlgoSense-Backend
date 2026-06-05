@@ -12,20 +12,35 @@ export default class UpdateConsistencyScore implements IUseCase<Partial<UserScor
     async call(userId: string, userScores: UserScores): Promise<Partial<UserScores>> {
         let daysLoggedIn = userScores ? userScores.days_logged_in : []
         if (!userScores) {
-            daysLoggedIn.push(new Date().toISOString())
+            daysLoggedIn.push(new Date().toISOString().split('.')[0] + 'Z')
         }
         else {
-            if (this.firstLoginToday(userScores.days_logged_in)) {
-                daysLoggedIn.push(new Date().toISOString())
+            let isFirstLoginToday: boolean
+            try {
+                isFirstLoginToday = this.firstLoginToday(daysLoggedIn)
             }
-            else{
+            catch (e) {
+                throw new InternalServerError('Unable to determine if user logged in today.')
+            }
+
+            if (isFirstLoginToday) {
+                daysLoggedIn.push(new Date().toISOString().split('.')[0] + 'Z')
+            }
+            else {
                 return userScores
             }
         }
 
-        const consistencyScore = this.getConsistencyScore(daysLoggedIn)
+        let consistencyScore: number;
+        try {
+            consistencyScore = this.getConsistencyScore(daysLoggedIn)
+        }
+        catch (e) {
+            throw new InternalServerError('Unable to calculate consistency score.')
+        }
 
         try {
+
             const updatedUserScores = await this.userDAO.setUserScores(userId, {
                 consistency_score: consistencyScore,
                 days_logged_in: daysLoggedIn
