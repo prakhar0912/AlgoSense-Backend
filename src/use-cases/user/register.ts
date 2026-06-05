@@ -40,7 +40,19 @@ export default class RegisterUser implements IUseCase<ILoginResponse> {
             const token = this.generateToken(newUser.id)
             return {
                 token,
-                user: newUser
+                user: {
+                    id: newUser.id,
+                    email: newUser.email,
+                    first_name: newUser.first_name,
+                    last_name: newUser.last_name,
+                    email_notifications_enabled: newUser.email_notifications_enabled,
+                    role: newUser.role,
+                    banned: newUser.banned,
+                    created_at: newUser.created_at,
+                    email_verified: newUser.email_verified,
+                    scores: newUser.scores ? newUser.scores : null,
+                    submissions: newUser.submissions ? newUser.submissions : null,
+                }
             }
         }
         catch (e) {

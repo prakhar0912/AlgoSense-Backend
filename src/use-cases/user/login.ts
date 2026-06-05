@@ -7,7 +7,7 @@ export default class Login implements IUseCase<ILoginResponse> {
     constructor(
         private userDAO: IUserDAO,
         private compareWithHashedPassword: (password: string, hashedPassword: string) => Promise<boolean>,
-        private generateToken: (userId: string) => Promise<string>
+        private generateToken: (userId: string) => string
     ) { }
     async call(email: string, password: string): Promise<ILoginResponse> {
         if (!email || !password) {
@@ -20,7 +20,7 @@ export default class Login implements IUseCase<ILoginResponse> {
             const { id, first_name, last_name, email, role, scores, created_at, submissions, email_notifications_enabled, email_verified } = user
             return {
                 user: { id, first_name, last_name, email, role, scores: scores ? scores : null, created_at, submissions: submissions ? submissions : null, email_notifications_enabled, email_verified },
-                token: await this.generateToken(user.id),
+                token: this.generateToken(user.id),
             }
         } else {
             throw new UnauthorizedError('Invalid login or password')

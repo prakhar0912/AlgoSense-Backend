@@ -1,0 +1,209 @@
+Entities
+1. User (roles: Admin | User)
+2. Problem
+3. Submission
+
+
+1. User
+	id!
+	Email!
+	Firstname!
+	Lastname!
+	Role!: (admin | user)
+	Scores: {
+			approaches_score: number
+			daysLoggedIn: Date[]
+			consistency_score: number
+			edge_case_score: number
+			total_score: number
+		} | null
+	createdAt: Date
+	submissions: Submission[]
+	
+ 
+2. Problem
+	id!
+	Title!: string
+	Description!: string
+	test_cases!: string[]
+	approaches!: 	{
+			type: string,
+			primary_technique?: string
+			time_complexity: string
+			space_complexity: string
+			req_or_constraints: string
+			steps: string[]
+			explanation: string
+			edge_cases: string
+			difficulty: number
+			}
+	evaluvation_criteria!: string
+
+
+3. Submissions
+	id!
+	user_id!
+	problem_id!
+	user_input!: string
+	timer: time | null
+	difficulty: number
+	approach_score: number
+	identified_approach: string
+	pass: boolean
+	missing_points: string
+	edge_case_gaps: string
+	edge_case_score: string
+
+
+
+
+
+
+
+const dsaTemplate = {
+  Problem: "[PROBLEM NAME]",
+  Description: "[DESCRIPTION OF THE PROBLEM]"
+  TestCases: "[3 ELABORATE AND VERBOSE SAMPLE TEST CASES OF THE PROBLEM]" 
+  Approaches: [
+    {
+      type: "Expected Approach",
+      PrimaryTechnique: "[PRIMARY TECHNIQUE]",
+      TimeComplexity: "[TIME COMPLEXITY]",
+      SpaceComplexity: "[SPACE COMPLEXITY]",
+      RequirementsOrConstraint: "[REQUIREMENT OR CONSTRAINT, if any]",
+      Steps: [
+        "[STEP 1]",
+        "[STEP 2]",
+        "[STEP 3]",
+        "[STEP 4]",
+        "[STEP 5]"
+      ],
+      ExplanationOfWhyThisWorks: "[EXPLANATION OF WHY THIS WORKS]",
+      EdgeCases: [
+        "[EDGE CASE 1]",
+        "[EDGE CASE 2]",
+        "[EDGE CASE 3]",
+        "[EDGE CASE 4]"
+      ]
+    },
+    {
+      type: "[APPROACH 1]",
+      TimeComplexity: "[TIME COMPLEXITY]",
+      SpaceComplexity: "[SPACE COMPLEXITY]",
+      RequirementsOrConstraints: "[REQUIREMENT OR CONSTRAINT, if any]",
+      Steps: [
+        "[DESCRIPTION]",
+        "[DESCRIPTION]",
+        "[DESCRIPTION]"
+      ],
+      ExplanationOfWhyThisWorks: "[EXPLANATION]",
+      Pros: [
+        "[PRO]",
+        "[PRO]"
+      ],
+      Cons: [
+        "[CON]",
+        "[CON]"
+      ],
+      EdgeCases: [
+        "[EDGE CASE 1]",
+        "[EDGE CASE 2]",
+        "[EDGE CASE 3]"
+      ]
+    },
+    {
+      type: "[APPROACH 2]",
+      TimeComplexity: "[TIME COMPLEXITY]",
+      SpaceComplexity: "[SPACE COMPLEXITY]",
+      RequirementsOrConstraints: "[REQUIREMENT OR CONSTRAINT, if any]",
+      Steps: [
+        "[DESCRIPTION]",
+        "[DESCRIPTION]",
+        "[DESCRIPTION]"
+      ],
+      ExplanationOfWhyThisWorks: "[EXPLANATION]",
+      Pros: [
+        "[PRO]",
+        "[PRO]"
+      ],
+      Cons: [
+        "[CON]",
+        "[CON]"
+      ],
+      EdgeCases: [
+        "[EDGE CASE 1]",
+        "[EDGE CASE 2]",
+        "[EDGE CASE 3]"
+      ]
+    }
+  ],
+  evaluation_criteria: [
+    "Correctness: [WHAT SHOULD BE CHECKED]",
+    "Completeness: [WHAT SHOULD BE CHECKED]",
+    "Clarity: [WHAT SHOULD BE CHECKED]",
+    "Alignment: [WHAT SHOULD BE CHECKED]",
+    "Edge Cases: [WHAT SHOULD BE CHECKED]",
+    "Missed Points: [WHAT SHOULD BE CHECKED]",
+    "Overall Understanding: [HOW TO JUDGE IT]"
+  ]
+};
+
+
+
+
+
+
+
+
+Use Cases
+
+Users
+1. Register
+2. Login
+3. Auth
+4. List problems(with filters)(Paginated)
+5. Show Problem
+6. Start Problem Timer
+7. Submit Solution, evaluate solution and produce score. 
+8. Update Profile with solved questions
+9. Calculate all scores of user
+10. View User Profile
+11. Delete Self User Profile
+12. Toggle email notifications
+13. Update Email
+14. Update Password
+15. Get user stats(Day streak, total questions solved, weak points grouped by Question category)
+16. Generate next problems list
+17. View leaderboard(Paginated)
+
+
+Admin
+1. Login
+2. Auth
+3. List Questions with filters
+4. Create Question
+5. Update Question
+6. Delete Question
+7. List Users with filters
+8. Ban User
+9. Remove User
+10. Update User
+
+
+
+
+User Score Calculation:
+
+1. Approach Score: (Answer Quality(Provided by AI)*Difficulty weight)/(10*Difficulty Weight)
+approachScore = approachScore + 
+
+2. Edge Cases Score: (Number of edge cases mentioned/Total number of edge cases) * (Difficulty Weight/Max Difficulty) * 100
+Average of all these scores is the users edge cases score.
+
+3. Consistency Score: 0.4 * active_day_ratio + 0.3 * streak_score + 0.1 * recency_score
+	a. active_day_ratio = today - account creation date >= 30 ? (active_days_last_30  / 30) : (active days since 	account creation/(today-account creation date))
+	b.streak_score = log(1 + current_streak) / log(31)
+	c. recency_score = e^(-days_since_last_active / 14)
+
+
+
