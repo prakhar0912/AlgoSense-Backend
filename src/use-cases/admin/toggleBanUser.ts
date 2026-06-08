@@ -10,15 +10,18 @@ export default class ToggleBanUser implements IUseCase<User> {
         private userDAO: IUserDAO
     ) { }
     async call(userId: string, toggle: boolean): Promise<User> {
-        if(toggle == null){
+        if (toggle == null && typeof toggle !== "boolean") {
             throw new ValidationError('Toggle value not provided')
         }
+        let user: User
         try {
-            const user = await this.userDAO.toggleBanUser(userId, toggle)
-            return user
+            user = await this.userDAO.toggleBanUser(userId, toggle)
         }
         catch (e) {
             throw new InternalServerError('Unable to access users in the DB')
         }
+
+        return user
+
     }
 }

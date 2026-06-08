@@ -9,18 +9,13 @@ export default class ListUsers implements IUseCase<IPaginated<User>> {
         private userDAO: IUserDAO
     ) { }
     async call(filters: Partial<User>): Promise<IPaginated<User>> {
+        let usersData: IPaginated<User>
         try {
-            let usersData = await this.userDAO.findAll(filters)
-            return {
-                data: usersData.data,
-                pagination: {
-                    page: usersData.pagination.page,
-                    perPage: usersData.pagination.perPage
-                }
-            }
+            usersData = await this.userDAO.findAll(filters)
         }
         catch(e){
             throw new InternalServerError('Unable to access users in the DB')
         }
+        return usersData
     }
 }

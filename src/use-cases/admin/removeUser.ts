@@ -7,12 +7,13 @@ export default class RemoveUser implements IUseCase<boolean>{
         private userDAO: IUserDAO
     ){}
     async call(userId: string): Promise<boolean>{
+        let success: boolean
         try{
-            let success = await this.userDAO.delete(userId)
-            return success
+            success = await this.userDAO.delete(userId)
         }
         catch(e){
             throw new InternalServerError('Unable delete user from DB.')
         }
+        return success
     }
 }

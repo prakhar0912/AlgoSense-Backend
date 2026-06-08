@@ -20,7 +20,7 @@ export default class UpdateConsistencyScore implements IUseCase<Partial<UserScor
                 isFirstLoginToday = this.firstLoginToday(daysLoggedIn)
             }
             catch (e) {
-                throw new InternalServerError('Unable to determine if user logged in today.')
+                throw new InternalServerError('Unable to determine if this is user\'s first login')
             }
 
             if (isFirstLoginToday) {
@@ -39,16 +39,17 @@ export default class UpdateConsistencyScore implements IUseCase<Partial<UserScor
             throw new InternalServerError('Unable to calculate consistency score.')
         }
 
+        let updatedUserScores: UserScores
         try {
-
-            const updatedUserScores = await this.userDAO.setUserScores(userId, {
+            updatedUserScores = await this.userDAO.setUserScores(userId, {
                 consistency_score: consistencyScore,
                 days_logged_in: daysLoggedIn
             })
-            return updatedUserScores
         }
         catch (e) {
             throw new InternalServerError('Unable to store new Scores.')
         }
+        return updatedUserScores
+
     }
 }

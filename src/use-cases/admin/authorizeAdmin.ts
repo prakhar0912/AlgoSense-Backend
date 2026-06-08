@@ -13,27 +13,37 @@ export default class AuthorizeAdmin implements IUseCase<User> {
         if (!token) {
             throw new UnauthorizedError('You`re not authorized')
         }
-        const id = this.verifyToken(token)
+        let id: string | null
+        try {
+            id = this.verifyToken(token)
+        }
+        catch (e) {
+            throw new InternalServerError('Token Verification Failed')
+        }
         if (!id) {
             throw new UnauthorizedError('Invalid or Expired Token')
         }
+        
+
+        let user: User | null | undefined
         try {
-            const user = await this.userDAO.findById(id)
-            if (!user) {
-                throw new UnauthorizedError('User doesn\'t exist')
-            }
-            if (user.role !== 'admin') {
-                throw new UnauthorizedError('User isn\'t an admin')
-            }
-            else if (user.role === 'admin') {
-                return user
-            }
-            else {
-                throw new UnauthorizedError('User isn\'t an admin')
-            }
+            user = await this.userDAO.findById(id)
         }
         catch (e) {
             throw new InternalServerError('Unable to access DB for user')
+        }
+        if (!user) {
+            throw new UnauthorizedError('User doesn\'t exist')
+        }
+
+        if (user.role !== 'admin') {
+            throw new UnauthorizedError('User isn\'t an admin')
+        }
+        else if (user.role === 'admin') {
+            return user
+        }
+        else {
+            throw new UnauthorizedError('User isn\'t an admin')
         }
     }
 }

@@ -11,12 +11,15 @@ export default class DeleteProblem implements IUseCase<boolean> {
         if (!problemId) {
             throw new ValidationError('Problem Id not provided')
         }
+
+        let success: boolean
         try {
-            let success = this.problemDAO.delete(problemId)
-            return success
+            success = await this.problemDAO.delete(problemId)
         }
         catch (e) {
             throw new InternalServerError('Unable to delete the problem in the DB')
         }
+
+        return success
     }
 }

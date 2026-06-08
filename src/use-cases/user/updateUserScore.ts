@@ -33,15 +33,20 @@ export default class UpdateUserScore implements IUseCase<Partial<UserScores>> {
             mergedApproachScore = (userScores.approaches_score + weightedApproachScore) / 2
             mergedEdgeCaseScore = (userScores.edge_case_score + (edgeCaseScore * 100)) / 2
         }
+
+
+        let updatedUserScores: UserScores
         try {
-            const updatedUserScores = await this.userDAO.setUserScores(userId, {
+            updatedUserScores = await this.userDAO.setUserScores(userId, {
                 approaches_score: mergedApproachScore,
                 edge_case_score: mergedEdgeCaseScore
             })
-            return updatedUserScores
         }
         catch (e) {
             throw new InternalServerError('Unable to store new Scores.')
         }
+
+        return updatedUserScores
+
     }
 }

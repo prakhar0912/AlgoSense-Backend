@@ -5,6 +5,7 @@ import { ValidationError } from "../../errors/index.js";
 import type IValidator from "../../interfaces/validator.js";
 import type ILoginResponse from "../../interfaces/user/loginResponse.js";
 import InternalServerError from "../../errors/internalServerError.js";
+import type User from "../../entities/user.js";
 
 export default class RegisterUser implements IUseCase<ILoginResponse> {
     constructor(
@@ -14,49 +15,75 @@ export default class RegisterUser implements IUseCase<ILoginResponse> {
         private generateToken: (userId: string) => string
     ) { }
     async call(payload: Pick<AuthUser, "email" | "password" | "first_name" | "last_name" | "email_notifications_enabled">): Promise<ILoginResponse> {
-        const validationResult = this.validateUserRegistration.validate(payload)
+        let validationResult
+        try {
+            validationResult = this.validateUserRegistration.validate(payload)
+        } catch (e) {
+            throw new InternalServerError('User Input Validation Function Failed')
+        }
         if (!validationResult.success || !validationResult.data) {
             throw new ValidationError('Invalid user registration data', validationResult.errors)
         }
+
+
+
+
         const { email, password, first_name, last_name, email_notifications_enabled } = validationResult.data
-        const existingUser = await this.userDAO.findByEmail(email)
+        let existingUser: User | null
+        try {
+            existingUser = await this.userDAO.findByEmail(email)
+        }
+        catch (e) {
+            throw new InternalServerError('Failed to check if user already exists')
+        }
         if (existingUser) {
             throw new ValidationError('Email is already in use', [{ path: ['email'], message: 'Email is already in use' }])
         }
-        const { salt, hashedPassword } = await this.hashPassword(password)
+
+
+
+        let hashedPasswordObj: { hashedPassword: string, salt: string }
         try {
-            const newUser = await this.userDAO.create({
+            hashedPasswordObj = await this.hashPassword(password)
+        }
+        catch (e) {
+            throw new InternalServerError('Failed to hash password')
+        }
+
+        let newUser: User
+        try {
+            newUser = await this.userDAO.create({
                 email,
                 first_name,
                 last_name,
                 email_notifications_enabled,
-                password: hashedPassword,
-                salt,
+                password: hashedPasswordObj.hashedPassword,
+                salt: hashedPasswordObj.salt,
                 role: 'user',
                 banned: false,
                 created_at: new Date(),
                 email_verified: false,
             })
-            const token = this.generateToken(newUser.id)
-            return {
-                token,
-                user: {
-                    id: newUser.id,
-                    email: newUser.email,
-                    first_name: newUser.first_name,
-                    last_name: newUser.last_name,
-                    email_notifications_enabled: newUser.email_notifications_enabled,
-                    role: newUser.role,
-                    banned: newUser.banned,
-                    created_at: newUser.created_at,
-                    email_verified: newUser.email_verified,
-                    scores: newUser.scores ? newUser.scores : null,
-                    submissions: newUser.submissions ? newUser.submissions : null,
-                }
-            }
         }
         catch (e) {
-            throw new InternalServerError('Error in creating user or token!')
+            throw new InternalServerError('Error in creating user')
+        }
+
+
+
+        let token: string
+        try {
+            token = this.generateToken(newUser.id)
+        }
+        catch (e) {
+            throw new InternalServerError('Error in generating token')
+        }
+
+
+
+        return {
+            user: newUser,
+            token
         }
     }
 }
