@@ -209,7 +209,7 @@ describe('UpdateConsistencyScore use‑case', () => {
 
       // Act & Assert
       await expect(useCase.call(TEST_USER_ID, existingScores)).rejects.toMatchObject(
-        new InternalServerError('Unable to determine if user logged in today.') as never
+        new InternalServerError('Unable to determine if this is user\'s first login') as never
       );
 
       // getConsistencyScore and DAO must not be reached
