@@ -10,8 +10,8 @@ export default class GetProblem implements IUseCase<Problem> {
         private problemDAO: IProblemDAO
     ) { }
     async call(problemId: string): Promise<Problem> {
-        if (!problemId) {
-            throw new ValidationError('Problem ID value not provided')
+        if (typeof problemId !== "string") {
+            throw new ValidationError('Problem ID must be a valid string')
         }
         let problem: Problem | null | undefined
         try {

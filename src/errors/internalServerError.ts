@@ -6,11 +6,9 @@ export default class InternalServerError extends Error implements IError {
 
     constructor(
         public message: string = 'Internal Server Error',
-        public details?: {
-            path: string[]
-            message: string
-        }[]
+        public originalError?: any
     ) {
         super(message);
+        // this.originalError = originalError
     }
 }

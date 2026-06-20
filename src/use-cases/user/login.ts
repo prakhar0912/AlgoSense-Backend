@@ -4,17 +4,28 @@ import InternalServerError from "../../errors/internalServerError.js";
 import type IUseCase from "../../interfaces/useCase.js";
 import type ILoginResponse from "../../interfaces/user/loginResponse.js";
 import type IUserDAO from "../../interfaces/user/userDAO.js";
+import type IValidator from "../../interfaces/validator.js";
 
 export default class Login implements IUseCase<ILoginResponse> {
     constructor(
         private userDAO: IUserDAO,
         private compareWithHashedPassword: (password: string, hashedPassword: string) => Promise<boolean>,
-        private generateToken: (userId: string) => string
+        private generateToken: (userId: string) => string,
+        private validateUserLogin: IValidator<{email: string, password: string}>
     ) { }
     async call(email: string, password: string): Promise<ILoginResponse> {
-        if (!email || !password) {
-            throw new ValidationError('Email and Password are required')
+        let validationResult
+        try {
+            validationResult = this.validateUserLogin.validate({email, password})
+        } catch (e) {
+            throw new InternalServerError('User Input Validation Function Failed')
         }
+        if (!validationResult.success || !validationResult.data) {
+            throw new ValidationError('Invalid user login data', validationResult.errors)
+        }
+        email = validationResult.data.email
+        password = validationResult.data.password
+
         let user: AuthUser | null | undefined
         try {
             user = await this.userDAO.findForAuth(email)
@@ -22,7 +33,7 @@ export default class Login implements IUseCase<ILoginResponse> {
         catch (e) {
             throw new InternalServerError('Internal Error in finding user from DB')
         }
-        if(!user){
+        if (!user) {
             throw new UnauthorizedError('Invalid Credentials')
         }
 
@@ -31,10 +42,10 @@ export default class Login implements IUseCase<ILoginResponse> {
         try {
             passwordsMatch = await this.compareWithHashedPassword(password, user.password)
         }
-        catch(e){
+        catch (e) {
             throw new InternalServerError('Error in comparing passwords')
         }
-        
+
         if (user && passwordsMatch) {
             let token: string
             try {

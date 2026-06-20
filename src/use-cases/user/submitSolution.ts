@@ -9,19 +9,32 @@ import type IUseCase from "../../interfaces/useCase.js";
 import type IUserDAO from "../../interfaces/user/userDAO.js";
 import type { IValidatorResult } from "../../interfaces/validator.js";
 import type IValidator from "../../interfaces/validator.js";
+type ModelResponse = {
+  approach_score?: number | undefined;
+  edge_case_score?: number | undefined;
+  identified_approach?: string | undefined;
+  edge_cases_missed?: string[] | undefined;
+  missing_points?: string[] | undefined;
+  pass?: boolean | undefined;
+};
 
 
 export default class SubmitSolution implements IUseCase<Submission> {
     constructor(
         private problemDAO: IProblemDAO,
         private submissionDAO: ISubmissionDAO,
-        private askGPT: (systemPrompt: Problem, userInput: string) => Promise<Partial<Submission>>,
-        private submissionValidator: IValidator<Submission>,
+        private askGPT: (systemPrompt: Problem, userInput: string) => Promise<ModelResponse>,
+        private submissionValidator: IValidator<ModelResponse>,
         private userSolutionValidator: IValidator<string>
     ) { }
     async call(userId: string, problemId: string, userInput: string): Promise<Submission> {
-        if (!problemId) {
-            throw new ValidationError('Problem ID value not provided')
+        
+        if (typeof userId !== "string" || typeof userId === "string" && userId.trim().length === 0) {
+            throw new ValidationError('User ID value invalid')
+        }
+        
+        if (typeof problemId !== "string" || typeof problemId === "string" && problemId.trim().length === 0) {
+            throw new ValidationError('Problem ID value invalid')
         }
 
 
@@ -57,11 +70,8 @@ export default class SubmitSolution implements IUseCase<Submission> {
         catch (e) {
             throw new InternalServerError('Error while fetching response from model')
         }
-        if (!modelResp) {
-            throw new InternalServerError('Model did not respond')
-        }
 
-        let validatedModelResp
+        let validatedModelResp: IValidatorResult<ModelResponse>
         try{
             validatedModelResp = this.submissionValidator.validate(modelResp)
         }
@@ -72,7 +82,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
         if (errors && errors.length > 0 || !data) {
             throw new InternalServerError('The model responded incorrectly', errors)
         }
-        if (data.approach_score == null || !data.edge_case_score || !data.identified_approach || !data.edge_cases_missed || !data.missing_points || !data.pass) {
+        if (!data.approach_score || !data.edge_case_score || !data.identified_approach || !data.edge_cases_missed || !data.missing_points || typeof data.pass !== 'boolean') {
             throw new InternalServerError('The model responded incorrectly')
         }
 

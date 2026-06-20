@@ -3,4 +3,5 @@ export default interface IError {
     message: string
     httpStatusCode: number
     details?: any
+    originalError?:any
 }

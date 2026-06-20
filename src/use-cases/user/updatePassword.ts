@@ -25,7 +25,7 @@ export default class UpdatePassword implements IUseCase<boolean> {
             throw new ValidationError('Password validator function failed')
         }
 
-        if (!validationResult.success || !validationResult.data) {
+        if (!validationResult.success || !validationResult.data || validationResult.errors) {
             throw new ValidationError('Invalid Password. Try again with a new one.', validationResult.errors)
         }
 

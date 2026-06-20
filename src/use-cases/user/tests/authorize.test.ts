@@ -1,286 +1,245 @@
-/**
- * Unit tests for the AuthorizeUser use‑case.
- *
- * What we verify:
- * 1. Valid token + existing user → returns the user entity.
- * 2. Missing/falsy token → UnauthorizedError.
- * 3. Token extraction throws unexpectedly → InternalServerError.
- * 4. Token extraction returns null → UnauthorizedError (invalid/expired).
- * 5. DAO lookup throws → InternalServerError.
- * 6. DAO returns null → UnauthorizedError (user doesn't exist).
- *
- * All external collaborators (DAO, token extractor) are mocked so the test
- * exercises only the use‑case logic.
- */
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-
-import AuthorizeUser from '../authorize.js';
-import type IUserDAO from '../../../interfaces/user/userDAO.js';
 import User from '../../../entities/user.js';
-import UnauthorizedError from '../../../errors/unauthorizedError.js';
-import InternalServerError from '../../../errors/internalServerError.js';
+import type IUserDAO from '../../../interfaces/user/userDAO.js';
+import AuthorizeUser from '../authorize.js';
 
-type MockUserDAO = jest.Mocked<IUserDAO>;
-type IExtractTokenValue = (token: string) => string | null;
+type ExtractTokenValue = (token: string) => string | null;
 
-// ---------------------------------------------------------------------------
-// Test data
-// ---------------------------------------------------------------------------
-const VALID_TOKEN = 'bearer-jwt-token-123';
-const VALID_USER_ID = 'user-uuid-abc';
+const TOKEN = 'valid-jwt-token';
+const USER_ID = 'user-123';
 
-function buildUser(overrides: Partial<User> = {}): User {
-  return {
-    id: VALID_USER_ID,
-    email: 'alice@example.com',
-    first_name: 'Alice',
-    last_name: 'Smith',
-    role: 'user',
+function createUser(overrides: Partial<User> = {}): User {
+  return Object.assign(new User(), {
+    id: USER_ID,
+    email: 'user@example.com',
+    first_name: 'Test',
+    last_name: 'User',
+    role: 'user' as const,
     banned: false,
     scores: null,
-    created_at: new Date(),
+    created_at: new Date('2026-01-01T00:00:00.000Z'),
     submissions: null,
     email_verified: true,
     email_notifications_enabled: true,
     ...overrides,
-  } as User;
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Test suite
-// ---------------------------------------------------------------------------
-describe('AuthorizeUser use‑case', () => {
-  let useCase: AuthorizeUser;
-  let userDAO: MockUserDAO;
-  let extractTokenValue: jest.Mock<IExtractTokenValue>;
+describe('AuthorizeUser', () => {
+  let extractTokenValue: jest.MockedFunction<ExtractTokenValue>;
+  let findById: jest.MockedFunction<IUserDAO['findById']>;
+  let userDAO: IUserDAO;
+  let authorizeUser: AuthorizeUser;
 
   beforeEach(() => {
-    // ---------- DAO mock ----------
-    userDAO = {
-      create: jest.fn(),
-      update: jest.fn(),
-      updatePassword: jest.fn(),
-      delete: jest.fn(),
-      findForAuth: jest.fn(),
-      findById: jest.fn(),
-      findByEmail: jest.fn(),
-      findAll: jest.fn(),
-      toggleBanUser: jest.fn(),
-      unbanUser: jest.fn(),
-      getUserScores: jest.fn(),
-      setUserScores: jest.fn(),
-      getUserSubmissions: jest.fn(),
-      getLast5Submissions: jest.fn(),
-      answer: jest.fn(),
-      viewProfile: jest.fn(),
-      resetPassword: jest.fn(),
-      verifyEmail: jest.fn(),
-      toggleEmailNotifications: jest.fn(),
-    } as unknown as MockUserDAO;
-
-    extractTokenValue = jest.fn();
-
-    useCase = new AuthorizeUser(extractTokenValue, userDAO);
-
-    jest.clearAllMocks();
+    extractTokenValue = jest.fn<ExtractTokenValue>();
+    findById = jest.fn<IUserDAO['findById']>();
+    userDAO = { findById } as unknown as IUserDAO;
+    authorizeUser = new AuthorizeUser(extractTokenValue, userDAO);
   });
 
-  // -----------------------------------------------------------------------
-  // 1️⃣ Happy path — valid token → ID → existing user
-  // -----------------------------------------------------------------------
-  describe('#call() – successful authorization', () => {
-    it('should return the user when the token is valid and the user exists', async () => {
+  describe('successful authorization', () => {
+    it('returns the exact user returned by the DAO', async () => {
       // Arrange
-      const user = buildUser();
-      extractTokenValue.mockReturnValueOnce(VALID_USER_ID);
-      userDAO.findById.mockResolvedValueOnce(user);
+      const user = createUser();
+      extractTokenValue.mockReturnValue(USER_ID);
+      findById.mockResolvedValue(user);
 
       // Act
-      const result = await useCase.call(VALID_TOKEN);
+      const result = await authorizeUser.call(TOKEN);
 
       // Assert
-      expect(extractTokenValue).toHaveBeenCalledWith(VALID_TOKEN);
-      expect(userDAO.findById).toHaveBeenCalledWith(VALID_USER_ID);
       expect(result).toBe(user);
+      expect(extractTokenValue).toHaveBeenCalledTimes(1);
+      expect(extractTokenValue).toHaveBeenCalledWith(TOKEN);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledWith(USER_ID);
+      expect(extractTokenValue.mock.invocationCallOrder[0]).toBeLessThan(
+        findById.mock.invocationCallOrder[0]!,
+      );
     });
 
-    it('should return the correct user for an admin role', async () => {
+    it.each([
+      ['admin user', { role: 'admin' as const }],
+      ['banned user', { banned: true }],
+      ['unverified user', { email_verified: false }],
+    ])('returns an existing %s because this use case only checks existence', async (_label, overrides) => {
       // Arrange
-      const adminUser = buildUser({ role: 'admin' });
-      extractTokenValue.mockReturnValueOnce(VALID_USER_ID);
-      userDAO.findById.mockResolvedValueOnce(adminUser);
+      const user = createUser(overrides);
+      extractTokenValue.mockReturnValue(USER_ID);
+      findById.mockResolvedValue(user);
 
       // Act
-      const result = await useCase.call(VALID_TOKEN);
+      const result = await authorizeUser.call(TOKEN);
 
       // Assert
-      expect(result.role).toBe('admin');
-      expect(result).toBe(adminUser);
-    });
-
-    it('should work even if user is banned (authorization is not ban-checking)', async () => {
-      // Arrange — AuthorizeUser only checks existence, not ban status
-      const bannedUser = buildUser({ banned: true });
-      extractTokenValue.mockReturnValueOnce(VALID_USER_ID);
-      userDAO.findById.mockResolvedValueOnce(bannedUser);
-
-      // Act
-      const result = await useCase.call(VALID_TOKEN);
-
-      // Assert
-      expect(result.banned).toBe(true);
-      expect(result).toBe(bannedUser);
+      expect(result).toBe(user);
+      expect(findById).toHaveBeenCalledWith(USER_ID);
     });
   });
 
-  // -----------------------------------------------------------------------
-  // 2️⃣ Missing / falsy token
-  // -----------------------------------------------------------------------
-  describe('#call() – missing token', () => {
-    it('should throw UnauthorizedError when token is empty string', async () => {
-      // Act & Assert
-      await expect(useCase.call('')).rejects.toMatchObject(
-        new UnauthorizedError(
-          'Please provide a token to authenticate',
-        ) as never,
-      );
+  describe('token input validation', () => {
+    it.each([
+      ['an empty string', ''],
+      ['null', null],
+      ['undefined', undefined],
+      ['a number', 123],
+      ['a boolean', false],
+      ['an object', {}],
+    ])('rejects %s before calling any dependency', async (_label, token) => {
+      // Act
+      const promise = authorizeUser.call(token as string);
 
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'UnauthorizedError',
+        message: 'Please provide a token to authenticate',
+        httpStatusCode: 401,
+      });
       expect(extractTokenValue).not.toHaveBeenCalled();
-      expect(userDAO.findById).not.toHaveBeenCalled();
+      expect(findById).not.toHaveBeenCalled();
     });
 
-    it('should throw UnauthorizedError when token is null', async () => {
-      // Act & Assert
-      await expect(
-        useCase.call(null as unknown as string),
-      ).rejects.toMatchObject(
-        new UnauthorizedError(
-          'Please provide a token to authenticate',
-        ) as never,
-      );
+    it('passes a whitespace-only token to the token extractor', async () => {
+      // Arrange
+      extractTokenValue.mockReturnValue(null);
 
-      expect(extractTokenValue).not.toHaveBeenCalled();
-    });
+      // Act
+      const promise = authorizeUser.call('   ');
 
-    it('should throw UnauthorizedError when token is undefined', async () => {
-      // Act & Assert
-      await expect(
-        useCase.call(undefined as unknown as string),
-      ).rejects.toMatchObject(
-        new UnauthorizedError(
-          'Please provide a token to authenticate',
-        ) as never,
-      );
-
-      expect(extractTokenValue).not.toHaveBeenCalled();
-    });
-
-    it('should throw UnauthorizedError when token is only whitespace (truthy string)', async () => {
-      // Arrange — " " is truthy, so it passes the !token guard
-      // and reaches extractTokenValue instead
-      extractTokenValue.mockReturnValueOnce(null);
-
-      // Act & Assert
-      await expect(useCase.call(' ')).rejects.toMatchObject(
-        new UnauthorizedError('Invalid or Expired Token') as never,
-      );
-
-      // extractTokenValue was called because " " is truthy
-      expect(extractTokenValue).toHaveBeenCalledWith(' ');
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'UnauthorizedError',
+        message: 'Invalid or Expired Token',
+        httpStatusCode: 401,
+      });
+      expect(extractTokenValue).toHaveBeenCalledTimes(1);
+      expect(extractTokenValue).toHaveBeenCalledWith('   ');
+      expect(findById).not.toHaveBeenCalled();
     });
   });
 
-  // -----------------------------------------------------------------------
-  // 3️⃣ Token extraction throws
-  // -----------------------------------------------------------------------
-  describe('#call() – extractTokenValue throws', () => {
-    it('should wrap the crash in InternalServerError', async () => {
+  describe('token extraction', () => {
+    it('wraps an Error thrown by the token extractor', async () => {
       // Arrange
       extractTokenValue.mockImplementation(() => {
-        throw new Error('JWT library crashed');
+        throw new Error('JWT verification failed');
       });
 
-      // Act & Assert
-      await expect(useCase.call(VALID_TOKEN)).rejects.toMatchObject(
-        new InternalServerError(
-          'Error while extracting Token value',
-        ) as never,
-      );
+      // Act
+      const promise = authorizeUser.call(TOKEN);
 
-      // DAO should not have been reached
-      expect(userDAO.findById).not.toHaveBeenCalled();
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'InternalServerError',
+        message: 'Error while extracting Token value',
+        httpStatusCode: 500,
+      });
+      expect(extractTokenValue).toHaveBeenCalledTimes(1);
+      expect(extractTokenValue).toHaveBeenCalledWith(TOKEN);
+      expect(findById).not.toHaveBeenCalled();
+    });
+
+    it('wraps a non-Error value thrown by the token extractor', async () => {
+      // Arrange
+      extractTokenValue.mockImplementation(() => {
+        throw 'token extraction failure';
+      });
+
+      // Act
+      const promise = authorizeUser.call(TOKEN);
+
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'InternalServerError',
+        message: 'Error while extracting Token value',
+        httpStatusCode: 500,
+      });
+      expect(findById).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['null', null],
+      ['an empty user ID', ''],
+      ['undefined', undefined],
+    ])('rejects when the token extractor returns %s', async (_label, extractedId) => {
+      // Arrange
+      extractTokenValue.mockReturnValue(extractedId as string | null);
+
+      // Act
+      const promise = authorizeUser.call(TOKEN);
+
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'UnauthorizedError',
+        message: 'Invalid or Expired Token',
+        httpStatusCode: 401,
+      });
+      expect(extractTokenValue).toHaveBeenCalledTimes(1);
+      expect(extractTokenValue).toHaveBeenCalledWith(TOKEN);
+      expect(findById).not.toHaveBeenCalled();
     });
   });
 
-  // -----------------------------------------------------------------------
-  // 4️⃣ Token extraction returns null (invalid / expired token)
-  // -----------------------------------------------------------------------
-  describe('#call() – extractTokenValue returns null', () => {
-    it('should throw UnauthorizedError when token cannot be decoded', async () => {
+  describe('user lookup', () => {
+    it('wraps an Error rejected by the DAO', async () => {
       // Arrange
-      extractTokenValue.mockReturnValueOnce(null);
+      extractTokenValue.mockReturnValue(USER_ID);
+      findById.mockRejectedValue(new Error('database unavailable'));
 
-      // Act & Assert
-      await expect(useCase.call(VALID_TOKEN)).rejects.toMatchObject(
-        new UnauthorizedError('Invalid or Expired Token') as never,
-      );
+      // Act
+      const promise = authorizeUser.call(TOKEN);
 
-      // DAO should not have been reached
-      expect(userDAO.findById).not.toHaveBeenCalled();
-    });
-  });
-
-  // -----------------------------------------------------------------------
-  // 5️⃣ DAO.findById throws
-  // -----------------------------------------------------------------------
-  describe('#call() – DAO.findById throws', () => {
-    it('should wrap a database failure in InternalServerError', async () => {
-      // Arrange
-      extractTokenValue.mockReturnValueOnce(VALID_USER_ID);
-      userDAO.findById.mockRejectedValueOnce(new Error('DB connection lost'));
-
-      // Act & Assert
-      await expect(useCase.call(VALID_TOKEN)).rejects.toMatchObject(
-        new InternalServerError(
-          'Error while fetching user from DB',
-        ) as never,
-      );
-
-      expect(extractTokenValue).toHaveBeenCalledWith(VALID_TOKEN);
-      expect(userDAO.findById).toHaveBeenCalledWith(VALID_USER_ID);
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'InternalServerError',
+        message: 'Error while fetching user from DB',
+        httpStatusCode: 500,
+      });
+      expect(extractTokenValue).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledWith(USER_ID);
     });
 
-    it('should wrap a non-Error rejection in InternalServerError', async () => {
+    it('wraps a non-Error rejection from the DAO', async () => {
       // Arrange
-      extractTokenValue.mockReturnValueOnce(VALID_USER_ID);
-      userDAO.findById.mockRejectedValueOnce('string rejection');
+      extractTokenValue.mockReturnValue(USER_ID);
+      findById.mockRejectedValue('database failure');
 
-      // Act & Assert
-      await expect(useCase.call(VALID_TOKEN)).rejects.toMatchObject(
-        new InternalServerError(
-          'Error while fetching user from DB',
-        ) as never,
-      );
+      // Act
+      const promise = authorizeUser.call(TOKEN);
+
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'InternalServerError',
+        message: 'Error while fetching user from DB',
+        httpStatusCode: 500,
+      });
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledWith(USER_ID);
     });
-  });
 
-  // -----------------------------------------------------------------------
-  // 6️⃣ DAO.findById returns null (user doesn't exist)
-  // -----------------------------------------------------------------------
-  describe('#call() – user not found in DB', () => {
-    it('should throw UnauthorizedError when no user matches the token ID', async () => {
+    it.each([
+      ['null', null],
+      ['undefined', undefined],
+    ])('rejects when the DAO returns %s', async (_label, user) => {
       // Arrange
-      extractTokenValue.mockReturnValueOnce(VALID_USER_ID);
-      userDAO.findById.mockResolvedValueOnce(null);
+      extractTokenValue.mockReturnValue(USER_ID);
+      findById.mockResolvedValue(user as User | null);
 
-      // Act & Assert
-      await expect(useCase.call(VALID_TOKEN)).rejects.toMatchObject(
-        new UnauthorizedError('User dosen\'t exist') as never,
-      );
+      // Act
+      const promise = authorizeUser.call(TOKEN);
 
-      expect(extractTokenValue).toHaveBeenCalledWith(VALID_TOKEN);
-      expect(userDAO.findById).toHaveBeenCalledWith(VALID_USER_ID);
+      // Assert
+      await expect(promise).rejects.toMatchObject({
+        name: 'UnauthorizedError',
+        message: "User dosen't exist",
+        httpStatusCode: 401,
+      });
+      expect(extractTokenValue).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledTimes(1);
+      expect(findById).toHaveBeenCalledWith(USER_ID);
     });
   });
 });

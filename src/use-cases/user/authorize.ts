@@ -12,7 +12,7 @@ export default class AuthorizeUser implements IUseCase<User> {
         private userDAO: IUserDAO
     ) { }
     async call(token: string): Promise<User> {
-        if (typeof token !== "string") {
+        if (typeof token !== "string" || typeof token === "string" && token.length === 0) {
             throw new UnauthorizedError('Please provide a token to authenticate')
         }
         let id: string | null | undefined

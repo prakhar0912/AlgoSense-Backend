@@ -10,7 +10,7 @@ export default class ShowProblem implements IUseCase<Problem> {
         private problemDAO: IProblemDAO,
     ) { }
     async call(problemId: string): Promise<Problem> {
-        if (!problemId) {
+        if (typeof problemId !== "string" || typeof problemId === "string" && problemId.trim().length === 0) {
             throw new ValidationError('Problem ID value not provided')
         }
         

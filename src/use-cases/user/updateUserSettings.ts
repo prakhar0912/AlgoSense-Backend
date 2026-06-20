@@ -5,25 +5,27 @@ import type IUseCase from "../../interfaces/useCase.js";
 import type IUserDAO from "../../interfaces/user/userDAO.js";
 import type IValidator from "../../interfaces/validator.js";
 
+type UserSettingsValues = Partial<Pick<User, 'email' | 'first_name' | 'last_name'  | 'email_notifications_enabled'>>
+
 export default class UpdateUserProfile implements IUseCase<Partial<User>> {
     constructor(
         private userDAO: IUserDAO,
-        private validateUserProfile: IValidator<Pick<User, 'email' | 'first_name' | 'last_name' | 'email_verified' | 'email_notifications_enabled'>>
+        private validateUserProfile: IValidator<UserSettingsValues>
     ) { }
-    async call(userId: string, updatedValues: Pick<User, 'email' | 'first_name' | 'last_name' | 'email_verified' | 'email_notifications_enabled'>) {
+    async call(userId: string, updatedValues: UserSettingsValues) {
         let validationResult
         try {
             validationResult = this.validateUserProfile.validate(updatedValues)
         } catch (e) {
             throw new InternalServerError('User Input Validation Function Failed')
         }
-        if (!validationResult.success || !validationResult.data) {
-            throw new ValidationError('Invalid user registration data', validationResult.errors)
+        if (!validationResult.success || !validationResult.data || validationResult.errors) {
+            throw new ValidationError('Invalid user profile data', validationResult.errors)
         }
 
         let updatedUserProfile: User
         try{
-            updatedUserProfile = await this.userDAO.update(userId, updatedValues)
+            updatedUserProfile = await this.userDAO.update(userId, validationResult.data)
         }
         catch(e){
             throw new InternalServerError('Unable to update user profile')
