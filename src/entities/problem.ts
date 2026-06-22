@@ -15,7 +15,7 @@ export default class Problem {
         edge_cases: {
             case: string
             importance: number
-        }
+        }[]
     }[]
     evaluation_criteria!: string[]
 }

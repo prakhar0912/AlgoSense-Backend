@@ -12,7 +12,7 @@ export default class RemoveUser implements IUseCase<boolean>{
             success = await this.userDAO.delete(userId)
         }
         catch(e){
-            throw new InternalServerError('Unable delete user from DB.')
+            throw new InternalServerError('Unable delete user from DB.', e)
         }
         return success
     }

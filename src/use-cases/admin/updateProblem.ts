@@ -12,19 +12,15 @@ export default class UpdateProblem implements IUseCase<Problem> {
         private problemValidator: IValidator<Problem>
     ) { }
     async call(problemId: string, payload: Partial<Problem>): Promise<Problem> {
-        if (!problemId) {
-            throw new ValidationError('Problem ID value not provided')
-        }
-
         let validatedProblem: IValidatorResult<Problem>
 
         try{
             validatedProblem = this.problemValidator.validate(payload)
         }
         catch(e){
-            throw new InternalServerError('Problem validator function failed')
+            throw new InternalServerError('Problem validator function failed', e)
         }
-        if (!validatedProblem.success || !validatedProblem.data) {
+        if (!validatedProblem.success || !validatedProblem.data || validatedProblem.errors) {
             throw new ValidationError('Problem Data Invalid.', validatedProblem.errors)
         }
 
@@ -33,7 +29,7 @@ export default class UpdateProblem implements IUseCase<Problem> {
             updatedProblem = await this.problemDAO.update(problemId, validatedProblem.data)
         }
         catch (e) {
-            throw new InternalServerError('Unable to update the problem to the DB')
+            throw new InternalServerError('Unable to update the problem to the DB', e)
         }
         return updatedProblem
     }

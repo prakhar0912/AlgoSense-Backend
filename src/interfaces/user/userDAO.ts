@@ -12,7 +12,7 @@ export default interface IUserDAO {
     findForAuth(email: string): Promise<AuthUser | null>
     findById(userId: string): Promise<User | null>
     findByEmail(email: string): Promise<User | null>
-    findAll(filters: Partial<User>): Promise<IPaginated<User>>
+    findAll(filters: Partial<User>, page: number, perPage: number): Promise<IPaginated<User>>
     toggleBanUser(userId: string, toggle: boolean): Promise<User>
     unbanUser(userId: string): Promise<User>
     getUserScores(userId: string): Promise<User['scores']>

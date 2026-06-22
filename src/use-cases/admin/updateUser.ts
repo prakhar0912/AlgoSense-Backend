@@ -12,18 +12,15 @@ export default class UpdateUser implements IUseCase<User> {
         private userValidator: IValidator<User>
     ) { }
     async call(userId: string, payload: Partial<User>): Promise<User> {
-        if (!userId) {
-            throw new ValidationError('User ID not provided.')
-        }
 
         let validatedUpdatedUser: IValidatorResult<User>
         try{
             validatedUpdatedUser = this.userValidator.validate(payload)            
         }
         catch(e){
-            throw new InternalServerError('User data validator function failed')
+            throw new InternalServerError('User data validator function failed', e)
         }
-        if (!validatedUpdatedUser.success || !validatedUpdatedUser.data) {
+        if (!validatedUpdatedUser.success || !validatedUpdatedUser.data || validatedUpdatedUser.errors) {
             throw new ValidationError('Problem Data Invalid.', validatedUpdatedUser.errors)
         }
 
@@ -32,7 +29,7 @@ export default class UpdateUser implements IUseCase<User> {
             updatedUser = await this.userDAO.update(userId, validatedUpdatedUser.data)
         }
         catch (e) {
-            throw new InternalServerError('Unable to update the problem to the DB')
+            throw new InternalServerError('Unable to update the problem to the DB', e)
         }
         return updatedUser
     }
