@@ -7,7 +7,7 @@ export default class UpdateUserScore implements IUseCase<Partial<UserScores>> {
     constructor(
         private userDAO: IUserDAO
     ) { }
-    async call(userId: string, userScores: UserScores, approachScore: number, edgeCaseScore: number): Promise<Partial<UserScores>> {
+    async call(userId: string, userScores: UserScores, approachScore: number, edgeCaseScore: number): Promise<UserScores> {
         if (approachScore === null || typeof approachScore !== "number") {
             throw new InternalServerError('Approach Score not sent')
         }

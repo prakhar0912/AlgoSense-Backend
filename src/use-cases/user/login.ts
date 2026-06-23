@@ -31,7 +31,7 @@ export default class Login implements IUseCase<ILoginResponse> {
             user = await this.userDAO.findForAuth(email)
         }
         catch (e) {
-            throw new InternalServerError('Internal Error in finding user from DB')
+            throw new InternalServerError('Internal Error in finding user from DB', e)
         }
         if (!user) {
             throw new UnauthorizedError('Invalid Credentials')
@@ -43,7 +43,7 @@ export default class Login implements IUseCase<ILoginResponse> {
             passwordsMatch = await this.compareWithHashedPassword(password, user.password)
         }
         catch (e) {
-            throw new InternalServerError('Error in comparing passwords')
+            throw new InternalServerError('Error in comparing passwords', e)
         }
 
         if (user && passwordsMatch) {
@@ -52,7 +52,7 @@ export default class Login implements IUseCase<ILoginResponse> {
                 token = this.generateToken(user.id)
             }
             catch (e) {
-                throw new InternalServerError('Error in extracting token, from DB userId')
+                throw new InternalServerError('Error in extracting token, from DB userId', e)
             }
 
 

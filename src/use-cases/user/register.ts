@@ -14,7 +14,7 @@ export default class RegisterUser implements IUseCase<ILoginResponse> {
         private hashPassword: (password: string) => Promise<{ salt: string; hashedPassword: string }>,
         private generateToken: (userId: string) => string
     ) { }
-    async call(payload: Pick<AuthUser, "email" | "password" | "first_name" | "last_name" | "email_notifications_enabled">): Promise<ILoginResponse> {
+    async call(payload: Pick<AuthUser, "retypedPassword" | "email" | "password" | "first_name" | "last_name" | "email_notifications_enabled">): Promise<ILoginResponse> {
         let validationResult
         try {
             validationResult = this.validateUserRegistration.validate(payload)
