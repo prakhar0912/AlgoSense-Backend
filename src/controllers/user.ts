@@ -29,6 +29,24 @@ export default class UserController {
 
     ) { }
 
+    //Helper Validator Functions
+
+    private validatePaginationParams(params?: IRequest['params']) {
+        const page = params?.page;
+        const perPage = params?.perPage;
+
+        if (
+            (page !== undefined && typeof page !== 'number') ||
+            (perPage !== undefined && typeof perPage !== 'number')
+        ) {
+            throw new ValidationError('Params are required to be numbers');
+        }
+
+        return { page, perPage };
+    }
+
+
+
     async deleteSelfUser(request: IRequest): Promise<boolean> {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
@@ -45,16 +63,7 @@ export default class UserController {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
         }
-        const page = request.params?.page;
-        const perPage = request.params?.perPage;
-
-        if (
-            (page !== undefined && typeof page !== 'number') ||
-            (perPage !== undefined && typeof perPage !== 'number')
-        ) {
-            throw new ValidationError('Params are required to be numbers');
-        }
-
+        const { page, perPage } = this.validatePaginationParams(request.params);
         try {
             const user = await this.authorizeUser.call(request.token)
             return await this.listProblems.call(page, perPage)
