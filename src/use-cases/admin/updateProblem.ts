@@ -9,13 +9,13 @@ import type IValidator from "../../interfaces/validator.js";
 export default class UpdateProblem implements IUseCase<Problem> {
     constructor(
         private problemDAO: IProblemDAO,
-        private problemValidator: IValidator<Problem>
+        private updateProblemValidator: IValidator<Problem>
     ) { }
     async call(problemId: string, payload: Partial<Problem>): Promise<Problem> {
         let validatedProblem: IValidatorResult<Problem>
 
         try{
-            validatedProblem = this.problemValidator.validate(payload)
+            validatedProblem = this.updateProblemValidator.validate(payload)
         }
         catch(e){
             throw new InternalServerError('Problem validator function failed', e)

@@ -2,7 +2,7 @@ export interface IValidatorResult<T> {
     success: boolean
     data?: T
     errors?: {
-        path: string[]
+        field: string
         message: string
     }[]
 }

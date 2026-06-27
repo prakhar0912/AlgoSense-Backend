@@ -16,8 +16,6 @@ export default class UserController {
     constructor(
         protected authorizeUser: IUseCase<User>,
         protected deleteSelf: IUseCase<boolean>,
-        protected listProblems: IUseCase<IPaginated<Problem>>,
-        protected getProblem: IUseCase<Problem>,
         protected submitSolution: IUseCase<Submission>,
         protected updateConsistencyScore: IUseCase<UserScores>,
         protected updatePassword: IUseCase<boolean>,
@@ -29,7 +27,6 @@ export default class UserController {
 
     ) { }
 
-    //Helper Validator Functions
 
     private validatePaginationParams(params?: IRequest['params']) {
         const page = params?.page;
@@ -45,76 +42,43 @@ export default class UserController {
         return { page, perPage };
     }
 
+    //Helper Functions above
 
 
     async deleteSelfUser(request: IRequest): Promise<boolean> {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
         }
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            return await this.deleteSelf.call(user.id)
-        } catch (e) {
-            throw e
-        }
+        const user = await this.authorizeUser.call(request.token)
+        return await this.deleteSelf.call(user.id)
     }
 
-    async getPaginatedProblems(request: IRequest): Promise<IPaginated<Problem>> {
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-        const { page, perPage } = this.validatePaginationParams(request.params);
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            return await this.listProblems.call(page, perPage)
-        } catch (e) {
-            throw e
-        }
-    }
-
-    async getProblemById(request: IRequest): Promise<Problem> {
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-        if (!request.params || !request.params.id || typeof request.params.id !== "string") {
-            throw new ValidationError('Id is required')
-        }
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            return await this.getProblem.call(request.params.id)
-        } catch (e) {
-            throw e
-        }
-    }
+   
 
     async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: UserScores | null | undefined, newScores: UserScores }> {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
         }
+        const user = await this.authorizeUser.call(request.token)
+
         if (!request.body || typeof request.body !== "object") {
             throw new ValidationError('Request body is required')
         }
         const body = request.body as { problem_id: string; userInput: string }
-
         if (!body.problem_id || typeof body.problem_id !== "string") {
             throw new ValidationError('Problem ID is not valid')
         }
         if (!body.userInput || typeof body.userInput !== "string") {
-            throw new ValidationError('Answer isn\'t valid')
+            throw new ValidationError('Answer isn\'t of valid type: string')
         }
 
 
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput)
-            const newScores = await this.updateUserScore.call(user.id, user.scores, result.approach_score, result.edge_case_score)
-            return {
-                result,
-                prevScores: user.scores,
-                newScores
-            }
-        } catch (e) {
-            throw e
+        const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput)
+        const newScores = await this.updateUserScore.call(user.id, user.scores, result.approach_score, result.edge_case_score)
+        return {
+            result,
+            prevScores: user.scores,
+            newScores
         }
     }
 
@@ -122,19 +86,15 @@ export default class UserController {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
         }
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            return await this.updateConsistencyScore.call(user.id, user.scores)
-        }
-        catch (e) {
-            throw e
-        }
+        const user = await this.authorizeUser.call(request.token)
+        return await this.updateConsistencyScore.call(user.id, user.scores)
     }
 
     async updateSelfPassword(request: IRequest): Promise<boolean> {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
         }
+        const user = await this.authorizeUser.call(request.token)
         if (!request.body || typeof request.body !== "object") {
             throw new ValidationError('Request body is required')
         }
@@ -145,13 +105,8 @@ export default class UserController {
         if (!body.retypedNewPassword || typeof body.retypedNewPassword !== "string") {
             throw new ValidationError('Retyped New Password is required')
         }
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            return await this.updatePassword.call(user.id, body.newPassword, body.retypedNewPassword)
-        }
-        catch (e) {
-            throw e
-        }
+        return await this.updatePassword.call(user.id, body.newPassword, body.retypedNewPassword)
+
     }
 
     async updateSelfProfile(request: IRequest): Promise<User> {
@@ -159,9 +114,9 @@ export default class UserController {
         if (!request.token || typeof request.token !== "string") {
             throw new ValidationError('Token is required')
         }
-        if (!request.body || typeof request.body !== "object") {
-            throw new ValidationError('Request body is required')
-        }
+
+        const user = await this.authorizeUser.call(request.token)
+
         let validationResult
         try {
             validationResult = this.profileDataValidator.validate(request.body as profileDataTypes)
@@ -173,13 +128,8 @@ export default class UserController {
         }
 
 
-        try {
-            const user = await this.authorizeUser.call(request.token)
-            return await this.updateUserSettings.call(user.id, validationResult.data as profileDataTypes)
-        }
-        catch (e) {
-            throw e
-        }
+        return await this.updateUserSettings.call(user.id, validationResult.data as profileDataTypes)
+
     }
 
 }

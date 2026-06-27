@@ -6,7 +6,7 @@ import type IUseCase from "../interfaces/useCase.js";
 import type ILoginResponse from "../interfaces/user/loginResponse.js";
 import type IValidator from "../interfaces/validator.js";
 
-type RegistrationDataTypes = Pick<AuthUser, 'email' | 'password' | 'first_name' | 'last_name' | 'email_notifications_enabled' | 'retypedPassword'>
+type RegistrationDataTypes = Pick<AuthUser, 'email' | 'password' | 'first_name' | 'last_name' | 'email_notifications_enabled' | 'retyped_password'>
 export default class AuthController {
     constructor(
         protected loginUser: IUseCase<ILoginResponse>,
