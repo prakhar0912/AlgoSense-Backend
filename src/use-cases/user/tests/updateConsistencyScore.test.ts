@@ -28,7 +28,6 @@ describe('UpdateConsistencyScore use‑case', () => {
       update: jest.fn(),
       updatePassword: jest.fn(),
       delete: jest.fn(),
-      findForAuth: jest.fn(),
       findById: jest.fn(),
       findByEmail: jest.fn(),
       findAll: jest.fn(),
@@ -49,7 +48,7 @@ describe('UpdateConsistencyScore use‑case', () => {
     getConsistencyScore = jest.fn();
 
     // instantiate the use‑case with fresh mocks for each test
-    useCase = new UpdateConsistencyScore(userDAO, firstLoginToday, getConsistencyScore);
+    useCase = new UpdateConsistencyScore(userDAO, getConsistencyScore);
 
     // clear call history between tests
     jest.clearAllMocks();

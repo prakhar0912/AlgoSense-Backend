@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import Problem from '../../../entities/problem.js';
 import Submission from '../../../entities/submission.js';
-import InternalServerError from '../../../errors/internalServerError.js';
-import NotFoundError from '../../../errors/notFoundError.js';
-import ValidationError from '../../../errors/validationError.js';
 import type IProblemDAO from '../../../interfaces/problem/problemDAO.js';
 import type ISubmissionDAO from '../../../interfaces/submission/submissionDAO.js';
 import type IValidator from '../../../interfaces/validator.js';
@@ -307,7 +304,7 @@ describe('SubmitSolution', () => {
       // Arrange
       userSolutionValidatorValidate.mockReturnValueOnce({
         success: false,
-        errors: [{ path: ['userInput'], message: 'invalid input' }],
+        errors: [{ field: 'userInput', message: 'invalid input' }],
       });
 
       // Act
@@ -543,7 +540,7 @@ describe('SubmitSolution', () => {
           missing_points: ['point 1'],
           pass: true,
         },
-        errors: [{ path: ['approach_score'], message: 'invalid' }],
+        errors: [{ field: 'approach_score', message: 'invalid' }],
       }],
     ])('throws InternalServerError when %s', async (_label, validationResult) => {
       // Arrange
@@ -561,9 +558,7 @@ describe('SubmitSolution', () => {
         missing_points: ['point 1'],
         pass: true,
       });
-      submissionValidatorValidate.mockReturnValueOnce(validationResult as ReturnType<
-        typeof submissionValidatorValidate
-      >);
+      submissionValidatorValidate.mockReturnValueOnce(validationResult as ReturnType<typeof submissionValidatorValidate>);
 
       // Act
       const promise = submitSolution.call('user-123', 'problem-123', 'console.log(1)');

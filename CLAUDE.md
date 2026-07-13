@@ -23,7 +23,6 @@ Clean/use-case architecture with dependency injection. The four layers are indep
 ### src/entities/ — Domain models
 Plain TypeScript classes with `!` (definite assignment) for required fields:
 - [src/entities/user.ts](src/entities/user.ts) — `User` (role: 'admin' | 'user', banned, scores, submissions)
-- [src/entities/authUser.ts](src/entities/authUser.ts) — `AuthUser extends User` (password, salt, retypedPassword)
 - [src/entities/userScores.ts](src/entities/userScores.ts) — `UserScores` (approaches_score, consistency_score, edge_case_score, total_score, days_logged_in)
 - [src/entities/problem.ts](src/entities/problem.ts) — `Problem` (title, description, testCases, approaches[], evaluation_criteria, difficulty: 1|2.5|6|7)
 - [src/entities/submission.ts](src/entities/submission.ts) — `Submission` (user_id, problem_id, user_input, approach_score, edge_case_score, pass, etc.)

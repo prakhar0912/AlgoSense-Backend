@@ -1,135 +1,177 @@
-import type Problem from "../entities/problem.js";
 import type Submission from "../entities/submission.js";
 import type User from "../entities/user.js";
 import type UserScores from "../entities/userScores.js";
 import InternalServerError from "../errors/internalServerError.js";
 import ValidationError from "../errors/validationError.js";
-import type IPaginated from "../interfaces/paginated.js";
 import type IRequest from "../interfaces/request.js";
-import type IUseCase from "../interfaces/useCase.js";
 import type IValidator from "../interfaces/validator.js";
-
 type profileDataTypes = Pick<User, 'first_name' | 'last_name' | 'email_notifications_enabled'>
 
 
+import type FindUserbyId from "../use-cases/user/findUser.js";
+import type DeleteUser from "../use-cases/user/deleteUser.js";
+import type SubmitSolution from "../use-cases/user/submitSolution.js";
+import type UpdateConsistencyScore from "../use-cases/user/updateConsistencyScore.js";
+import type UpdateUserScore from "../use-cases/user/updateUserScore.js";
+import type UpdateUserProfile from "../use-cases/user/updateUserSettings.js";
+import type RegisterUser from "../use-cases/user/register.js";
+
 export default class UserController {
-    constructor(
-        protected authorizeUser: IUseCase<User>,
-        protected deleteSelf: IUseCase<boolean>,
-        protected submitSolution: IUseCase<Submission>,
-        protected updateConsistencyScore: IUseCase<UserScores>,
-        protected updatePassword: IUseCase<boolean>,
-        protected updateUserScore: IUseCase<UserScores>,
-        protected updateUserSettings: IUseCase<User>,
+  constructor(
+    protected findUserbyId: FindUserbyId,
+    protected deleteSelf: DeleteUser,
+    protected submitSolution: SubmitSolution,
+    protected updateConsistencyScore: UpdateConsistencyScore,
+    protected updateUserScore: UpdateUserScore,
+    protected updateUserSettings: UpdateUserProfile,
+    protected createUser: RegisterUser,
+    // Validators
+    protected profileDataValidator: IValidator<profileDataTypes>,
 
-        // Validators
-        protected profileDataValidator: IValidator<profileDataTypes>,
-
-    ) { }
+  ) { }
 
 
-    private validatePaginationParams(params?: IRequest['params']) {
-        const page = params?.page;
-        const perPage = params?.perPage;
+  private validatePaginationParams(params?: IRequest['params']) {
+    const page = params?.page;
+    const perPage = params?.perPage;
 
-        if (
-            (page !== undefined && typeof page !== 'number') ||
-            (perPage !== undefined && typeof perPage !== 'number')
-        ) {
-            throw new ValidationError('Params are required to be numbers');
-        }
-
-        return { page, perPage };
+    if (
+      (page !== undefined && typeof page !== 'number') ||
+      (perPage !== undefined && typeof perPage !== 'number')
+    ) {
+      throw new ValidationError('Params are required to be numbers');
     }
 
-    //Helper Functions above
+    return { page, perPage };
+  }
 
-
-    async deleteSelfUser(request: IRequest): Promise<boolean> {
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-        const user = await this.authorizeUser.call(request.token)
-        return await this.deleteSelf.call(user.id)
+  //Helper Functions above
+  async newUserRegistration(request: IRequest): Promise<User | null> {
+    type UserCreationPayload = {
+      id: string
+      email: string,
+      first_name?: string,
+      last_name?: string,
+      created_at: string,
+      email_verified: boolean,
+      email_notifications_enabled?: boolean
     }
 
-   
 
-    async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: UserScores | null | undefined, newScores: UserScores }> {
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-        const user = await this.authorizeUser.call(request.token)
+    if (!request.body || typeof request.body !== "object") {
+      throw new ValidationError('Request body is required')
+    }
+    const body = request.body as UserCreationPayload
 
-        if (!request.body || typeof request.body !== "object") {
-            throw new ValidationError('Request body is required')
-        }
-        const body = request.body as { problem_id: string; userInput: string }
-        if (!body.problem_id || typeof body.problem_id !== "string") {
-            throw new ValidationError('Problem ID is not valid')
-        }
-        if (!body.userInput || typeof body.userInput !== "string") {
-            throw new ValidationError('Answer isn\'t of valid type: string')
-        }
-
-
-        const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput)
-        const newScores = await this.updateUserScore.call(user.id, user.scores, result.approach_score, result.edge_case_score)
-        return {
-            result,
-            prevScores: user.scores,
-            newScores
-        }
+    if (!body.id || typeof body.id !== "string") {
+      throw new ValidationError('User ID is not valid')
     }
 
-    async updateConsistencyScores(request: IRequest): Promise<UserScores> {
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-        const user = await this.authorizeUser.call(request.token)
-        return await this.updateConsistencyScore.call(user.id, user.scores)
+    if (!body.email || typeof body.email !== "string") {
+      throw new ValidationError('email should be a string')
     }
 
-    async updateSelfPassword(request: IRequest): Promise<boolean> {
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-        const user = await this.authorizeUser.call(request.token)
-        if (!request.body || typeof request.body !== "object") {
-            throw new ValidationError('Request body is required')
-        }
-        const body = request.body as { newPassword: string, retypedNewPassword: string }
-        if (!body.newPassword || typeof body.newPassword !== "string") {
-            throw new ValidationError('New Password is required')
-        }
-        if (!body.retypedNewPassword || typeof body.retypedNewPassword !== "string") {
-            throw new ValidationError('Retyped New Password is required')
-        }
-        return await this.updatePassword.call(user.id, body.newPassword, body.retypedNewPassword)
-
+    if (body.first_name && typeof body.first_name !== "string") {
+      throw new ValidationError('first_name should be a string')
     }
 
-    async updateSelfProfile(request: IRequest): Promise<User> {
-
-        if (!request.token || typeof request.token !== "string") {
-            throw new ValidationError('Token is required')
-        }
-
-        const user = await this.authorizeUser.call(request.token)
-
-        let validationResult
-        try {
-            validationResult = this.profileDataValidator.validate(request.body as profileDataTypes)
-        } catch (e) {
-            throw new InternalServerError('User Input Validation Function Failed', e)
-        }
-        if (!validationResult.success || !validationResult.data || validationResult.errors) {
-            throw new ValidationError('Invalid user profile data', validationResult.errors)
-        }
-
-
-        return await this.updateUserSettings.call(user.id, validationResult.data as profileDataTypes)
-
+    if (body.last_name && typeof body.last_name !== "string") {
+      throw new ValidationError('last_name should be a string')
     }
+
+    if (!body.created_at || typeof body.created_at !== "string") {
+      throw new ValidationError('created_at should be a string')
+    }
+
+    if (!body.email_verified || typeof body.email_verified !== "boolean") {
+      throw new ValidationError('email_verified should be a boolean')
+    }
+
+
+    if (body.email_notifications_enabled && typeof body.email_notifications_enabled !== "boolean") {
+      throw new ValidationError('email_notifications_enabled should be a boolean')
+    }
+
+    return await this.createUser.call(request.body as UserCreationPayload)
+
+  }
+
+  async deleteSelfUser(request: IRequest) {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+    return await this.deleteSelf.call(request.userId)
+  }
+
+
+
+  async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: UserScores | null | undefined, newScores: UserScores }> {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+
+    const user = await this.findUserbyId.call(request.userId)
+    if (user.scores === undefined) {
+      throw new InternalServerError("User Data malformed, please reach out to an admin")
+    }
+    if (!request.body || typeof request.body !== "object") {
+      throw new ValidationError('Request body is required')
+    }
+    const body = request.body as { problem_id: string; userInput: string }
+    if (!body.problem_id || typeof body.problem_id !== "string") {
+      throw new ValidationError('Problem ID is not valid')
+    }
+    if (!body.userInput || typeof body.userInput !== "string") {
+      throw new ValidationError('Answer isn\'t of valid type: string')
+    }
+
+
+    const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput)
+    if (!result) {
+      throw new InternalServerError("Didn't get good response from solution submitter")
+    }
+    if (typeof result.approach_score !== "number" || typeof result.edge_case_score !== "number") {
+      throw new InternalServerError("Recieved malformed data from model response")
+    }
+    const newScores = await this.updateUserScore.call(user.id, user.scores, result.approach_score, result.edge_case_score)
+    if (!newScores) {
+      throw new InternalServerError("Didn't get good response from solution submitter")
+    }
+    return {
+      result,
+      prevScores: user.scores,
+      newScores
+    }
+  }
+
+  async updateConsistencyScores(request: IRequest) {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+
+    const user = await this.findUserbyId.call(request.userId)
+    return await this.updateConsistencyScore.call(user.id, user.scores)
+  }
+
+  async updateSelfProfile(request: IRequest) {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+
+
+    let validationResult
+    try {
+      validationResult = this.profileDataValidator.validate(request.body as profileDataTypes)
+    } catch (e) {
+      throw new InternalServerError('User Input Validation Function Failed', e)
+    }
+    if (!validationResult.success || !validationResult.data || validationResult.errors) {
+      throw new ValidationError('Invalid user profile data', validationResult.errors)
+    }
+
+
+    return await this.updateUserSettings.call(request.userId, validationResult.data as profileDataTypes)
+
+  }
 
 }

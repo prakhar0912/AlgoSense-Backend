@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-
-import InternalServerError from '../../../errors/internalServerError.js';
 import DeleteProblem from '../deleteProblem.js';
 import type IProblemDAO from '../../../interfaces/problem/problemDAO.js';
 

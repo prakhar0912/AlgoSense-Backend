@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 import User from '../../../entities/user.js';
-import InternalServerError from '../../../errors/internalServerError.js';
-import NotFoundError from '../../../errors/notFoundError.js';
-import ValidationError from '../../../errors/validationError.js';
 import type IUserDAO from '../../../interfaces/user/userDAO.js';
 import ToggleBanUser from '../toggleBanUser.js';
 

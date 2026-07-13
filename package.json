@@ -12,12 +12,20 @@
   "description": "",
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.1.0",
+    "@types/pg": "^8.20.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
     "typescript": "^6.0.3"
   },
   "dependencies": {
+    "argon2": "^0.44.0",
+    "dotenv": "^17.4.2",
+    "express-oauth2-jwt-bearer": "^1.9.1",
     "isomorphic-dompurify": "^3.18.0",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.22.0",
     "zod": "^4.4.3"
   }
 }
