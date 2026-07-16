@@ -17,7 +17,7 @@ function createUser(overrides: Partial<User> = {}): User {
     banned: false,
     scores: null,
     created_at: new Date('2026-01-01T00:00:00.000Z'),
-    submissions: null,
+    last_5_submissions: null,
     email_verified: true,
     email_notifications_enabled: true,
     ...overrides,
@@ -74,7 +74,7 @@ describe('ListUsers', () => {
       ['email verified filter', { email_verified: false }],
       ['notifications filter', { email_notifications_enabled: false }],
       ['created_at filter', { created_at: new Date('2026-01-01T00:00:00.000Z') }],
-      ['submissions filter', { submissions: [] }],
+      ['last_5_submissions filter', { last_5_submissions: [] }],
       ['scores filter', { scores: null }],
     ])('forwards %s unchanged to the DAO', async (_label, filters) => {
       // Arrange

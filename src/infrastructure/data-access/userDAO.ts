@@ -1,7 +1,9 @@
+// TODO: Change created_at from a string to a proper ISODate format capable of validation
+//TODO: Let the user table hold only the latest 5 submission's small information
 import client from './client.js'
 import type { PoolClient, QueryResultRow } from 'pg'
 
-import Submission from '../../entities/submission.js'
+import ShortSubmission from '../../entities/shortSubmission.js'
 import User from '../../entities/user.js'
 import UserScores from '../../entities/userScores.js'
 import type IPaginated from '../../interfaces/paginated.js'
@@ -18,7 +20,7 @@ type UserRow = QueryResultRow & {
   banned: boolean
   scores: unknown | null
   created_at: string | Date | null
-  submissions: unknown | null
+  last_5_submissions: unknown | null
   email_verified: boolean
   email_notifications_enabled: boolean
 }
@@ -27,8 +29,8 @@ type ScoreRow = QueryResultRow & {
   scores: unknown | null
 }
 
-type SubmissionsRow = QueryResultRow & {
-  submissions: unknown | null
+type Last5SubmissionsRow = QueryResultRow & {
+  last_5_submissions: unknown | null
 }
 
 type EmailNotificationsRow = QueryResultRow & {
@@ -46,7 +48,7 @@ const USER_COLUMNS = [
   'banned',
   'scores',
   'created_at',
-  'submissions',
+  'last_5_submissions',
   'email_verified',
   'email_notifications_enabled',
 ] as const
@@ -60,7 +62,7 @@ const FILTERABLE_COLUMNS = new Set<keyof User>([
   'banned',
   'scores',
   'created_at',
-  'submissions',
+  'last_5_submissions',
   'email_verified',
   'email_notifications_enabled',
 ])
@@ -73,7 +75,7 @@ const UPDATABLE_COLUMNS = new Set<keyof User>([
   'banned',
   'scores',
   'created_at',
-  'submissions',
+  'last_5_submissions',
   'email_verified',
   'email_notifications_enabled',
 ])
@@ -136,23 +138,21 @@ function toIsoStringArray(value: unknown): string[] {
   return value.map((item) => toIsoString(item)).filter((item) => item.length > 0)
 }
 
-function normalizeSubmission(value: unknown): Submission {
+function normalizeShortSubmission(value: unknown): ShortSubmission {
   const raw = isRecord(value) ? value : {}
-  const submission = new Submission()
+  const submission = new ShortSubmission()
 
-  submission.id = typeof raw.id === 'string' ? raw.id : ''
-  submission.user_id = typeof raw.user_id === 'string' ? raw.user_id : ''
+  submission.submission_id = typeof raw.submission_id === 'string'
+    ? raw.submission_id
+    : typeof raw.id === 'string'
+      ? raw.id
+      : ''
   submission.problem_id = typeof raw.problem_id === 'string' ? raw.problem_id : ''
   submission.difficulty = toFiniteNumber(raw.difficulty)
-  submission.user_input = typeof raw.user_input === 'string' ? raw.user_input : ''
   submission.timer = raw.timer === null || raw.timer === undefined ? null : toFiniteNumber(raw.timer)
-  if (raw.approach_score !== undefined && raw.approach_score !== null) {
-    submission.approach_score = toFiniteNumber(raw.approach_score)
-  }
+  submission.approach_score = toFiniteNumber(raw.approach_score)
   submission.identified_approach = typeof raw.identified_approach === 'string' ? raw.identified_approach : ''
   submission.pass = typeof raw.pass === 'boolean' ? raw.pass : false
-  submission.missing_points = toStringArray(raw.missing_points)
-  submission.edge_cases_missed = toStringArray(raw.edge_cases_missed)
   submission.edge_case_score = toFiniteNumber(raw.edge_case_score)
   submission.submitted_at = toIsoString(raw.submitted_at ?? new Date())
 
@@ -175,7 +175,7 @@ function normalizeScores(value: unknown): UserScores | null {
   return scores
 }
 
-function normalizeSubmissions(value: unknown): Submission[] | null {
+function normalizeShortSubmissions(value: unknown): ShortSubmission[] | null {
   if (value === null || value === undefined) {
     return null
   }
@@ -184,7 +184,35 @@ function normalizeSubmissions(value: unknown): Submission[] | null {
     return []
   }
 
-  return value.map((submission) => normalizeSubmission(submission))
+  return value.map((submission) => normalizeShortSubmission(submission))
+}
+
+function toShortSubmissionJson(submission: unknown): JsonLike {
+  const normalized = normalizeShortSubmission(submission)
+
+  return {
+    submission_id: normalized.submission_id,
+    problem_id: normalized.problem_id,
+    difficulty: normalized.difficulty,
+    timer: normalized.timer,
+    approach_score: normalized.approach_score,
+    identified_approach: normalized.identified_approach,
+    pass: normalized.pass,
+    edge_case_score: normalized.edge_case_score,
+    submitted_at: normalized.submitted_at,
+  }
+}
+
+function toShortSubmissionJsonArray(value: unknown): JsonLike | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  if (!Array.isArray(value)) {
+    return null
+  }
+
+  return value.map((submission) => toShortSubmissionJson(submission))
 }
 
 function buildSelectColumns(): string {
@@ -213,7 +241,6 @@ export default class UserDAO implements IUserDAO {
   async create(userData: User) {
     const query = `
       INSERT INTO users (
-        id,
         email,
         first_name,
         last_name,
@@ -221,16 +248,15 @@ export default class UserDAO implements IUserDAO {
         banned,
         scores,
         created_at,
-        submissions,
+        last_5_submissions,
         email_verified,
         email_notifications_enabled
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb[], $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb[], $9, $10)
       RETURNING ${buildSelectColumns()}
     `
 
     const params = [
-      userData.id,
       userData.email,
       userData.first_name ?? null,
       userData.last_name ?? null,
@@ -244,21 +270,7 @@ export default class UserDAO implements IUserDAO {
         total_score: userData.scores.total_score,
       } : null,
       toIsoString(userData.created_at),
-      userData.submissions ? userData.submissions.map((submission) => ({
-        id: submission.id,
-        user_id: submission.user_id,
-        problem_id: submission.problem_id,
-        difficulty: submission.difficulty,
-        user_input: submission.user_input,
-        timer: submission.timer ?? null,
-        approach_score: submission.approach_score ?? null,
-        identified_approach: submission.identified_approach,
-        pass: submission.pass,
-        missing_points: submission.missing_points,
-        edge_cases_missed: submission.edge_cases_missed,
-        edge_case_score: submission.edge_case_score,
-        submitted_at: submission.submitted_at,
-      })) : null,
+      toShortSubmissionJsonArray(userData.last_5_submissions),
       userData.email_verified,
       userData.email_notifications_enabled,
     ]
@@ -395,9 +407,9 @@ export default class UserDAO implements IUserDAO {
     }
   }
 
-  async getUserSubmissions(userId: string): Promise<Submission[] | null> {
-    const result = await this.db.query<SubmissionsRow>(
-      'SELECT submissions FROM users WHERE id = $1 LIMIT 1',
+  async getUserSubmissions(userId: string): Promise<ShortSubmission[] | null> {
+    const result = await this.db.query<Last5SubmissionsRow>(
+      'SELECT last_5_submissions FROM users WHERE id = $1 LIMIT 1',
       [userId],
     )
 
@@ -410,12 +422,12 @@ export default class UserDAO implements IUserDAO {
       return null
     }
 
-    return normalizeSubmissions(row.submissions)
+    return normalizeShortSubmissions(row.last_5_submissions)
   }
 
-  async getLast5Submissions(userId: string): Promise<Submission[] | null> {
-    const result = await this.db.query<SubmissionsRow>(
-      'SELECT submissions FROM users WHERE id = $1 LIMIT 1',
+  async getLast5Submissions(userId: string): Promise<ShortSubmission[] | null> {
+    const result = await this.db.query<Last5SubmissionsRow>(
+      'SELECT last_5_submissions FROM users WHERE id = $1 LIMIT 1',
       [userId],
     )
 
@@ -428,12 +440,40 @@ export default class UserDAO implements IUserDAO {
       return null
     }
 
-    const submissions = normalizeSubmissions(row.submissions)
+    const submissions = normalizeShortSubmissions(row.last_5_submissions)
     if (!submissions) {
       return null
     }
 
     return submissions.slice(-5)
+  }
+
+  async setSubmissionsInProfile(userId: string, payload: Partial<ShortSubmission[]>): Promise<ShortSubmission[]> {
+    const result = await this.db.query<Last5SubmissionsRow>(
+      `
+        UPDATE users
+        SET last_5_submissions = $2::jsonb[]
+        WHERE id = $1
+        RETURNING last_5_submissions
+      `,
+      [userId, toShortSubmissionJsonArray(payload)],
+    )
+
+    if (result.rows.length === 0) {
+      throw new Error("Failed to persist the update data")
+    }
+
+    const row = result.rows[0]
+    if (!row) {
+      throw new Error("Failed to persist the update data")
+    }
+
+    const submissions = normalizeShortSubmissions(row.last_5_submissions)
+    if (!submissions) {
+      throw new Error("Failed to persist the update data")
+    }
+
+    return submissions
   }
 
   async viewProfile(userId: string): Promise<User | null> {
@@ -515,10 +555,14 @@ export default class UserDAO implements IUserDAO {
       const key = rawKey as keyof User
 
       switch (key) {
-        case 'scores':
-        case 'submissions': {
+        case 'scores': {
           params.push(extractJsonPatch(rawValue))
           clauses.push(`${key} IS NOT DISTINCT FROM $${params.length}::jsonb`)
+          break
+        }
+        case 'last_5_submissions': {
+          params.push(toShortSubmissionJsonArray(rawValue))
+          clauses.push(`${key} IS NOT DISTINCT FROM $${params.length}::jsonb[]`)
           break
         }
         case 'created_at': {
@@ -571,12 +615,12 @@ export default class UserDAO implements IUserDAO {
           }
           break
         }
-        case 'submissions': {
+        case 'last_5_submissions': {
           if (rawValue === null) {
-            setClauses.push('submissions = NULL')
+            setClauses.push('last_5_submissions = NULL')
           } else {
-            params.push(rawValue)
-            setClauses.push(`submissions = $${params.length}::jsonb`)
+            params.push(toShortSubmissionJsonArray(rawValue))
+            setClauses.push(`last_5_submissions = $${params.length}::jsonb[]`)
           }
           break
         }
@@ -633,7 +677,7 @@ export default class UserDAO implements IUserDAO {
     user.banned = row.banned
     user.scores = normalizeScores(row.scores)
     user.created_at = toIsoString(row.created_at)
-    user.submissions = normalizeSubmissions(row.submissions)
+    user.last_5_submissions = normalizeShortSubmissions(row.last_5_submissions)
     user.email_verified = row.email_verified
     user.email_notifications_enabled = row.email_notifications_enabled
     return user

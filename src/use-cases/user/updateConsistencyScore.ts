@@ -2,16 +2,17 @@ import type UserScores from "../../entities/userScores.js";
 import InternalServerError from "../../errors/internalServerError.js";
 import type IUseCase from "../../interfaces/useCase.js";
 import type IUserDAO from "../../interfaces/user/userDAO.js";
+import type User from "../../entities/user.js";
 
 export default class UpdateConsistencyScore implements IUseCase<UserScores> {
   constructor(
     private userDAO: IUserDAO,
     private getConsistencyScore: (daysLoggedIn: string[]) => number
   ) { }
-  async call(userId: string, userScores: UserScores | null | undefined): Promise<UserScores> {
+  async call(userId: string, userScores: User['scores']): Promise<UserScores> {
     const daysLoggedIn = userScores && userScores.days_logged_in ? userScores.days_logged_in : []
     if (!userScores || daysLoggedIn.length === 0) {
-      daysLoggedIn.push(new Date().toISOString().split('.')[0] + 'Z')
+      daysLoggedIn.push(new Date().toISOString())
     }
     else {
       const lastLoginStr = daysLoggedIn[daysLoggedIn.length - 1]
@@ -32,11 +33,11 @@ export default class UpdateConsistencyScore implements IUseCase<UserScores> {
       latestMidnight.setHours(0, 0, 0, 0);
 
       // 4. Compare timestamps
-      let isFirstLoginToday = latestMidnight.getTime() < latestMidnight.getTime();
+      let isFirstLoginToday = latestMidnight.getTime() < Midnight.getTime();
 
 
       if (isFirstLoginToday) {
-        daysLoggedIn.push(new Date().toISOString().split('.')[0] + 'Z')
+        daysLoggedIn.push(new Date().toISOString())
       }
       else {
         return userScores

@@ -1,5 +1,5 @@
-import 'dotenv/config'
-import pg from 'pg'
+import "dotenv/config"
+import pg from "pg"
 const { Pool } = pg
 
 
@@ -11,8 +11,7 @@ const config = {
   port: 5432
 }
 
-console.log(config)
-const pool = new Pool(config)
+export const pool = new Pool(config)
 pool.on('error', (err: unknown) => {
   console.log('Unexpected error oidle client', err)
   process.exit(-1)

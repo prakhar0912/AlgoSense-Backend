@@ -19,14 +19,16 @@ const updateUserValidator = z.object({
         edge_case_score: z.number().optional(),
         total_score: z.number().optional()
     }).optional().nullable(),
-    submissions: z.array(z.object({
-        id: z.string().max(500, "Must be less than 500 characters").transform((val) => sanitize(val)),
+    last_5_submissions: z.array(z.object({
+        submission_id: z.string().max(500, "Must be less than 500 characters").transform((val) => sanitize(val)),
+        problem_id: z.string().max(500, "Must be less than 500 characters").transform((val) => sanitize(val)).optional(),
+        difficulty: z.number().optional(),
+        timer: z.number().nullable().optional(),
         approach_score: z.number().min(1).max(10).optional(),
-        edge_case_score: z.number().min(1).max(10).optional(),
-        user_input: z.string().max(1500, "Must be less than 1500 characters").transform((val) => sanitize(val)).optional(),
+        identified_approach: z.string().max(1500, "Must be less than 1500 characters").transform((val) => sanitize(val)).optional(),
         pass: z.boolean().optional(),
-        missing_points: z.array(z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))).optional(),
-        edge_cases_missed: z.array(z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))).optional(),
+        edge_case_score: z.number().min(1).max(10).optional(),
+        submitted_at: z.string().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)).optional(),
     })).optional().nullable()
 })
 .strict()

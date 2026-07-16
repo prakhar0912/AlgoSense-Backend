@@ -41,7 +41,7 @@ function buildPersistedUser(overrides: Partial<User> = {}) {
     banned: false,
     scores: null,
     created_at: VALID_PAYLOAD.created_at,
-    submissions: null,
+    last_5_submissions: null,
     email_verified: VALID_PAYLOAD.email_verified,
     email_notifications_enabled: true,
     ...overrides,

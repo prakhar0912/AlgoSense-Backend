@@ -183,7 +183,7 @@ describe('UpdateUserProfile', () => {
       ['email', { email: 'bad@example.com', role: 'admin' }],
       ['first_name', { first_name: 'Ada', banned: true }],
       ['last_name', { last_name: 'Lovelace', created_at: new Date('2026-01-01T00:00:00.000Z') }],
-      ['email_notifications_enabled', { email_notifications_enabled: false, submissions: [] }],
+      ['email_notifications_enabled', { email_notifications_enabled: false, last_5_submissions: [] }],
       ['multiple user properties', { email: 'bad@example.com', role: 'admin', banned: true, email_verified: false }],
     ])('rejects updatedValues containing extra User property: %s', async (_label, extraValues) => {
       // Arrange

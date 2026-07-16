@@ -6,7 +6,7 @@ export default class Submission {
   difficulty!: number
   user_input!: string
   timer?: number | null
-  approach_score?: number
+  approach_score!: number
   identified_approach!: string | ""
   pass!: boolean
   missing_points!: string[] | []

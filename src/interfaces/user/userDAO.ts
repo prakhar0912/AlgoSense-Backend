@@ -1,3 +1,4 @@
+import type ShortSubmission from "../../entities/shortSubmission.js"
 import User from "../../entities/user.js"
 import type UserScores from "../../entities/userScores.js"
 import type IPaginated from "../paginated.js"
@@ -14,9 +15,8 @@ export default interface IUserDAO {
   unbanUser(userId: string): Promise<User> //Find the user using userId in the Users table and set banned field to false
   getUserScores(userId: string): Promise<User['scores'] | null> //Find the user in the Users table and the query only returns the scores field
   setUserScores(userId: string, scores: Partial<UserScores>): Promise<UserScores> // Find the user in the Users table using userId and update the jsonb object in the scores field, or overwrite it completely with the scores argument
-  getUserSubmissions(userId: string): Promise<User['submissions'] | null> //Return the sumbissions field for the userId in the Users table
-  getLast5Submissions(userId: string): Promise<User['submissions'] | null> //Return the last 5 array items in the submissions field for the userId in the Users table
   viewProfile(userId: string): Promise<User | null> // Return entire user based on userID from Users table
   toggleEmailNotifications(userId: string, enable: boolean): Promise<boolean> // Update the email_notifications_enabled field in the user based on userId in the Users table
-  updateUser(userId: string, payload: Partial<User>): Promise<User> // Update the user based on the userId in the Users table using the payload, it could update any field in the user row.
+  updateUser(userId: string, payload: Partial<User>): Promise<User>, // Update the user based on the userId in the Users table using the payload, it could update any field in the user row.
+  setSubmissionsInProfile(userId: string, payload: Partial<ShortSubmission[]>): Promise<ShortSubmission[]> // Overwrite last5submissions column for userId using payload in users tables.
 }

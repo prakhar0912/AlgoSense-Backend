@@ -1,5 +1,5 @@
-import Submission from "./submission.js"
 import UserScores from "./userScores.js"
+import ShortSubmission from "./shortSubmission.js"
 
 export default class User {
   id!: string
@@ -10,7 +10,7 @@ export default class User {
   banned!: boolean
   scores?: UserScores | null
   created_at!: string
-  submissions?: Submission[] | null
+  last_5_submissions?: ShortSubmission[] | null
   email_verified!: boolean
   email_notifications_enabled!: boolean
 }

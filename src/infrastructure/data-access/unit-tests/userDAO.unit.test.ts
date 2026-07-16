@@ -8,6 +8,7 @@ await jest.unstable_mockModule('../client.js', () => ({
 
 const { default: UserDAO } = await import('../userDAO.js')
 import User from '../../../entities/user.js'
+import ShortSubmission from '../../../entities/shortSubmission.js'
 import UserScores from '../../../entities/userScores.js'
 
 type MockDbClient = Pick<PoolClient, 'query'>
@@ -27,19 +28,15 @@ function createUserRow(overrides: Record<string, unknown> = {}) {
       days_logged_in: ['2026-01-01T00:00:00.000Z'],
     },
     created_at: new Date('2026-01-02T00:00:00.000Z'),
-    submissions: [
+    last_5_submissions: [
       {
-        id: 'submission-1',
-        user_id: 'user-123',
+        submission_id: 'submission-1',
         problem_id: 'problem-1',
         difficulty: 2.5,
-        user_input: 'print(1)',
         timer: null,
         approach_score: 8,
         identified_approach: 'Greedy',
         pass: true,
-        missing_points: [],
-        edge_cases_missed: [],
         edge_case_score: 7,
         submitted_at: '2026-01-02T00:00:00.000Z',
       },
@@ -50,19 +47,15 @@ function createUserRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function createSubmission(index: number) {
+function createShortSubmission(index: number) {
   return {
-    id: `submission-${index}`,
-    user_id: 'user-123',
+    submission_id: `submission-${index}`,
     problem_id: 'problem-1',
     difficulty: 2.5,
-    user_input: `input-${index}`,
     timer: null,
     approach_score: index,
     identified_approach: `approach-${index}`,
     pass: index % 2 === 0,
-    missing_points: [],
-    edge_cases_missed: [],
     edge_case_score: index,
     submitted_at: `2026-01-${String(index).padStart(2, '0')}T00:00:00.000Z`,
   }
@@ -113,10 +106,11 @@ describe('UserDAO', () => {
       total_score: 60,
       days_logged_in: ['2026-01-01T00:00:00.000Z'],
     })
-    expect(result?.submissions?.[0]).toMatchObject({
-      id: 'submission-1',
-      user_id: 'user-123',
+    expect(result?.last_5_submissions?.[0]).toBeInstanceOf(ShortSubmission)
+    expect(result?.last_5_submissions?.[0]).toMatchObject({
+      submission_id: 'submission-1',
       problem_id: 'problem-1',
+      difficulty: 2.5,
       pass: true,
       edge_case_score: 7,
     })
@@ -178,20 +172,47 @@ describe('UserDAO', () => {
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
 
     await expect(dao.delete('user-123')).resolves.toBe(true)
-    await expect(dao.delete('missing-user')).resolves.toBeNull()
+    await expect(dao.delete('missing-user')).rejects.toThrow(new Error("Couldn't persist the delete operation"))
   })
 
   it('returns the last five submissions in order', async () => {
     query.mockResolvedValueOnce({
-      rows: [{ submissions: Array.from({ length: 6 }, (_v, index) => createSubmission(index + 1)) }],
+      rows: [{ last_5_submissions: Array.from({ length: 6 }, (_v, index) => createShortSubmission(index + 1)) }],
       rowCount: 1,
     })
 
     const result = await dao.getLast5Submissions('user-123')
 
     expect(result).toHaveLength(5)
-    expect(result?.[0].id).toBe('submission-2')
-    expect(result?.[4].id).toBe('submission-6')
+    expect(result?.[0]).toBeInstanceOf(ShortSubmission)
+    expect(result?.[0]?.submission_id).toBe('submission-2')
+    expect(result?.[4]?.submission_id).toBe('submission-6')
+  })
+
+  it('overwrites the profile submissions column and returns the stored array', async () => {
+    const submissions = [
+      createShortSubmission(1),
+      createShortSubmission(2),
+    ]
+
+    query.mockResolvedValueOnce({
+      rows: [{ last_5_submissions: submissions }],
+      rowCount: 1,
+    })
+
+    const result = await dao.setSubmissionsInProfile('user-123', submissions)
+
+    expect(query).toHaveBeenCalledWith(
+      expect.stringContaining('SET last_5_submissions = $2'),
+      ['user-123', submissions],
+    )
+    expect(result).toHaveLength(2)
+    expect(result[0]).toBeInstanceOf(ShortSubmission)
+    expect(result[0]).toMatchObject({
+      submission_id: 'submission-1',
+      problem_id: 'problem-1',
+      difficulty: 2.5,
+    })
   })
 
   it('returns the boolean value from toggleEmailNotifications', async () => {

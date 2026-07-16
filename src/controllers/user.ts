@@ -126,7 +126,7 @@ export default class UserController {
     }
 
 
-    const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput)
+    const result = await this.submitSolution.call(user.id, user.scores, user.last_5_submissions, body.problem_id, body.userInput)
     if (!result) {
       throw new InternalServerError("Didn't get good response from solution submitter")
     }

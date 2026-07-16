@@ -1,5 +1,7 @@
 import Problem from "../../entities/problem.js";
 import Submission from "../../entities/submission.js";
+import UserScores from "../../entities/userScores.js";
+import User from "../../entities/user.js";
 import InternalServerError from "../../errors/internalServerError.js";
 import NotFoundError from "../../errors/notFoundError.js";
 import ValidationError from "../../errors/validationError.js";
@@ -8,6 +10,9 @@ import type ISubmissionDAO from "../../interfaces/submission/submissionDAO.js";
 import type IUseCase from "../../interfaces/useCase.js";
 import type { IValidatorResult } from "../../interfaces/validator.js";
 import type IValidator from "../../interfaces/validator.js";
+import type IUserDAO from "../../interfaces/user/userDAO.js";
+import ShortSubmission from "../../entities/shortSubmission.js";
+
 type ModelResponse = {
   approach_score?: number | undefined;
   edge_case_score?: number | undefined;
@@ -20,13 +25,14 @@ type ModelResponse = {
 
 export default class SubmitSolution implements IUseCase<Submission> {
   constructor(
+    private userDAO: IUserDAO,
     private problemDAO: IProblemDAO,
     private submissionDAO: ISubmissionDAO,
     private askGPT: (systemPrompt: Problem, userInput: string) => Promise<ModelResponse>,
     private submissionValidator: IValidator<ModelResponse>,
     private userSolutionValidator: IValidator<string>
   ) { }
-  async call(userId: string, problemId: string, userInput: string): Promise<Submission> {
+  async call(userId: string, userScores: User['scores'], last5submissions: User['last_5_submissions'], problemId: string, userInput: string): Promise<Submission> {
 
     if (typeof userId !== "string" || typeof userId === "string" && userId.trim().length === 0) {
       throw new ValidationError('User ID value invalid')
@@ -105,6 +111,68 @@ export default class SubmitSolution implements IUseCase<Submission> {
     catch (e) {
       throw new InternalServerError('Failed to add submission to database')
     }
+
+    const maxPossibleScore = 10
+    let mergedApproachScore = 0
+    let mergedEdgeCaseScore = 0
+
+
+
+    if (!userScores) {
+      mergedApproachScore = ((submission.approach_score) / (maxPossibleScore)) * 100
+      mergedEdgeCaseScore = submission.edge_case_score * 100
+    }
+    else {
+      const weightedApproachScore = ((submission.approach_score) / (maxPossibleScore)) * 100
+      mergedApproachScore = (userScores.approaches_score + weightedApproachScore) / 2
+      mergedEdgeCaseScore = (userScores.edge_case_score + (submission.edge_case_score * 100)) / 2
+    }
+
+
+    let updatedUserScores: UserScores
+    try {
+      updatedUserScores = await this.userDAO.setUserScores(userId, {
+        approaches_score: mergedApproachScore,
+        edge_case_score: mergedEdgeCaseScore
+      })
+    }
+    catch (e) {
+      throw new InternalServerError('Unable to store new Scores.')
+    }
+
+
+    last5submissions = last5submissions && Array.isArray(last5submissions) ? last5submissions : []
+    let newestToOldest = [...last5submissions].sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
+
+    while (newestToOldest.length > 4) {
+      newestToOldest.pop()
+    }
+
+
+    let newShortSubmission = new ShortSubmission()
+
+    newShortSubmission.submission_id = submission.id
+    newShortSubmission.problem_id = submission.problem_id
+    newShortSubmission.difficulty = submission.difficulty
+    newShortSubmission.timer = submission.timer ? submission.timer : null
+    newShortSubmission.approach_score = submission.approach_score
+    newShortSubmission.identified_approach = submission.identified_approach
+    newShortSubmission.pass = submission.pass
+    newShortSubmission.edge_case_score = submission.edge_case_score
+    newShortSubmission.submitted_at = submission.submitted_at
+
+    newestToOldest.unshift(newShortSubmission)
+
+    let updatedShortSubmissions: ShortSubmission[]
+    try {
+      updatedShortSubmissions = await this.userDAO.setSubmissionsInProfile(userId, newestToOldest)
+    }
+    catch (e) {
+      throw new InternalServerError('Unable to store new Submission Data to Database.')
+    }
+
+
+
     return submission
 
   }

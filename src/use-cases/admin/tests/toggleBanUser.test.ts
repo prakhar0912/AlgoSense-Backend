@@ -14,7 +14,7 @@ function createUser(overrides: Partial<User> = {}): User {
     banned: false,
     scores: null,
     created_at: new Date('2026-01-01T00:00:00.000Z'),
-    submissions: null,
+    last_5_submissions: null,
     email_verified: true,
     email_notifications_enabled: true,
     ...overrides,
