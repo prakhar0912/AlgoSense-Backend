@@ -57,7 +57,11 @@ function buildSubmissionInput(index: number): Partial<Submission> {
     identified_approach: `approach-${index}`,
     pass: index % 2 === 0,
     missing_points: [`missing-${index}`],
-    edge_cases_missed: [`edge-${index}`],
+    edge_cases: [{
+      description: `edge-${index}`,
+      importance: "high",
+      coverage: "partial",
+    }],
     edge_case_score: 8 - index,
     submitted_at: submittedAt,
   };
@@ -118,7 +122,7 @@ describe("SubmissionDAO integration", () => {
       expect(created.identified_approach).toBe(input.identified_approach);
       expect(created.pass).toBe(input.pass);
       expect(created.missing_points).toEqual(input.missing_points);
-      expect(created.edge_cases_missed).toEqual(input.edge_cases_missed);
+      expect(created.edge_cases).toEqual(input.edge_cases);
       expect(created.edge_case_score).toBe(input.edge_case_score);
       expect(new Date(created.submitted_at).toISOString()).toBe(input.submitted_at);
     }
@@ -153,7 +157,7 @@ describe("SubmissionDAO integration", () => {
         identified_approach: createdSubmissions[index].identified_approach,
         pass: createdSubmissions[index].pass,
         missing_points: createdSubmissions[index].missing_points,
-        edge_cases_missed: createdSubmissions[index].edge_cases_missed,
+        edge_cases: createdSubmissions[index].edge_cases,
         edge_case_score: createdSubmissions[index].edge_case_score,
       });
       expect(new Date(lookedUp.submitted_at).toISOString()).toBe(createdSubmissions[index].submitted_at);

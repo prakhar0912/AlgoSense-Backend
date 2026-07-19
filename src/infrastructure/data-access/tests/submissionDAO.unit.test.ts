@@ -27,7 +27,7 @@ type SubmissionRow = QueryResultRow & {
   identified_approach: string | null;
   pass: boolean;
   missing_points: unknown;
-  edge_cases_missed: unknown;
+  edge_cases: unknown;
   edge_case_score: number | string;
   submitted_at: string | Date | null;
 };
@@ -44,7 +44,7 @@ function buildSubmissionRow(overrides: Partial<SubmissionRow> = {}): SubmissionR
     identified_approach: "Dynamic programming",
     pass: true,
     missing_points: ["point-1"],
-    edge_cases_missed: ["edge-1"],
+    edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
     edge_case_score: 8,
     submitted_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -63,7 +63,7 @@ function buildSubmission(overrides: Partial<Submission> = {}): Submission {
     identified_approach: "Dynamic programming",
     pass: true,
     missing_points: ["point-1"],
-    edge_cases_missed: ["edge-1"],
+    edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
     edge_case_score: 8,
     submitted_at: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -95,7 +95,7 @@ describe("SubmissionDAO unit", () => {
       identified_approach: "Dynamic programming",
       pass: true,
       missing_points: ["point-1"],
-      edge_cases_missed: ["edge-1"],
+      edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
       edge_case_score: 8,
       submitted_at: "2026-01-01T00:00:00.000Z",
     };
@@ -126,7 +126,7 @@ describe("SubmissionDAO unit", () => {
       payload.identified_approach,
       payload.pass,
       payload.missing_points,
-      payload.edge_cases_missed,
+      payload.edge_cases,
       payload.edge_case_score,
       payload.submitted_at,
     ]);
@@ -205,7 +205,7 @@ describe("SubmissionDAO unit", () => {
         identified_approach: "Dynamic programming",
         pass: true,
         missing_points: ["point-1"],
-        edge_cases_missed: ["edge-1"],
+        edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
         edge_case_score: 8,
         submitted_at: "2026-01-01T00:00:00.000Z",
       }),

@@ -19,7 +19,8 @@ type SubmissionRow = QueryResultRow & {
   identified_approach: string | null;
   pass: boolean;
   missing_points: unknown;
-  edge_cases_missed: unknown;
+  edge_cases: unknown;
+  edge_cases_missed?: unknown;
   edge_case_score: number | string;
   submitted_at: string | Date | null;
 };
@@ -35,7 +36,7 @@ const SUBMISSION_COLUMNS = [
   "identified_approach",
   "pass",
   "missing_points",
-  "edge_cases_missed",
+  "edge_cases",
   "edge_case_score",
   "submitted_at",
 ] as const;
@@ -82,12 +83,73 @@ function toFiniteNumber(value: unknown): number {
   return 0;
 }
 
-function toStringArray(value: unknown): string[] {
+function toMissingPointsArray(value: unknown): string[] {
+  if (typeof value === "string") {
+    return value.trim().length > 0 ? [value] : [];
+  }
+
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value.filter((item): item is string => typeof item === "string");
+}
+
+type SubmissionEdgeCase = {
+  description: string;
+  importance: string;
+  coverage: string;
+};
+
+function normalizeEdgeCase(value: unknown): SubmissionEdgeCase | null {
+  if (isRecord(value)) {
+    return {
+      description: typeof value.description === "string" ? value.description : "",
+      importance: typeof value.importance === "string" ? value.importance : "",
+      coverage: typeof value.coverage === "string" ? value.coverage : "",
+    };
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return null;
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (isRecord(parsed)) {
+        return {
+          description: typeof parsed.description === "string" ? parsed.description : "",
+          importance: typeof parsed.importance === "string" ? parsed.importance : "",
+          coverage: typeof parsed.coverage === "string" ? parsed.coverage : "",
+        };
+      }
+    }
+    catch {
+      return {
+        description: value,
+        importance: "",
+        coverage: "",
+      };
+    }
+
+    return {
+      description: value,
+      importance: "",
+      coverage: "",
+    };
+  }
+
+  return null;
+}
+
+function toEdgeCaseArray(value: unknown): SubmissionEdgeCase[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => normalizeEdgeCase(item)).filter((item): item is SubmissionEdgeCase => item !== null);
 }
 
 function buildSelectColumns(): string {
@@ -111,8 +173,8 @@ function normalizeSubmissionRow(row: SubmissionRow): Submission {
 
   submission.identified_approach = typeof raw.identified_approach === "string" ? raw.identified_approach : "";
   submission.pass = typeof raw.pass === "boolean" ? raw.pass : false;
-  submission.missing_points = toStringArray(raw.missing_points);
-  submission.edge_cases_missed = toStringArray(raw.edge_cases_missed);
+  submission.missing_points = toMissingPointsArray(raw.missing_points ?? row.missing_points) as unknown as string;
+  submission.edge_cases = toEdgeCaseArray(raw.edge_cases ?? raw.edge_cases_missed);
   submission.edge_case_score = toFiniteNumber(raw.edge_case_score ?? row.edge_case_score);
   submission.submitted_at = toIsoString(raw.submitted_at ?? row.submitted_at ?? new Date());
 
@@ -134,11 +196,11 @@ export default class SubmissionDAO implements ISubmissionDAO {
         identified_approach,
         pass,
         missing_points,
-        edge_cases_missed,
+        edge_cases,
         edge_case_score,
         submitted_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10::text[], $11, $12)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10::jsonb[], $11, $12)
       RETURNING ${buildSelectColumns()}
     `;
 
@@ -151,8 +213,8 @@ export default class SubmissionDAO implements ISubmissionDAO {
       submissionPayload.approach_score ?? null,
       submissionPayload.identified_approach ?? "",
       submissionPayload.pass ?? false,
-      submissionPayload.missing_points ?? [],
-      submissionPayload.edge_cases_missed ?? [],
+      toMissingPointsArray(submissionPayload.missing_points),
+      submissionPayload.edge_cases ?? [],
       submissionPayload.edge_case_score ?? null,
       submissionPayload.submitted_at ? toIsoString(submissionPayload.submitted_at) : new Date().toISOString(),
     ];

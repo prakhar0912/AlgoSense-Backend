@@ -25,6 +25,7 @@
     "express-oauth2-jwt-bearer": "^1.9.1",
     "isomorphic-dompurify": "^3.18.0",
     "jsonwebtoken": "^9.0.3",
+    "openai": "^6.48.0",
     "pg": "^8.22.0",
     "zod": "^4.4.3"
   }

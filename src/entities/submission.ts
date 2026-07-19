@@ -9,8 +9,8 @@ export default class Submission {
   approach_score!: number
   identified_approach!: string | ""
   pass!: boolean
-  missing_points!: string[] | []
-  edge_cases_missed!: string[] | []
+  missing_points!: string
+  edge_cases!: { description: string, importance: string, coverage: string }[] | []
   edge_case_score!: number
   submitted_at!: string
 }
