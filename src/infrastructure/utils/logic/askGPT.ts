@@ -1,6 +1,7 @@
 import type Problem from '../../../entities/problem.js';
 import type ModelResponse from '../../../interfaces/problem/modelResponse.js';
 import "dotenv/config.js"
+import keys from "../../../config/app.js"
 
 const systemPromptCreator = (problem: Problem) => {
   type approach = Problem['approaches'][number]
@@ -89,7 +90,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
-      Authorization: 'Bearer ' + process.env.OPEN_ROUTER_KEY,
+      Authorization: 'Bearer ' + keys.open_router_key,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({

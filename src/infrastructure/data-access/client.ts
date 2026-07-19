@@ -1,14 +1,14 @@
-import "dotenv/config.js"
 import pg from "pg"
 const { Pool } = pg
+import keys from "../../config/app.js"
 
 
 const config = {
-  user: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  port: Number(process.env.PGPORT)
+  user: keys.database.user,
+  password: keys.database.password,
+  host: keys.database.host,
+  database: keys.database.dbName,
+  port: keys.database.port
 }
 
 export const pool = new Pool(config)
