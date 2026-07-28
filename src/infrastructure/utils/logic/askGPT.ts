@@ -86,7 +86,7 @@ ${problem.evaluation_criteria.map(c => `  - ${c}`).join('\n')}`
 export default async (problem: Problem, userInput: string): Promise<ModelResponse> => {
 
   let { systemPrompt, approachesStrings, edgeCases } = systemPromptCreator(problem)
-  let models = ['tencent/hy3:free', 'poolside/laguna-m.1:free']
+  let models = ['nvidia/nemotron-3-ultra-550b-a55b:free', 'tencent/hy3:free', 'poolside/laguna-m.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free']
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -134,10 +134,11 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
               //TODO: Make this prompt better, for better results
               edge_cases_missed_in_user_explanation: {
                 type: 'array',
+                // description: "Array of objects, providing edge_case_coverage and edge_case_description for every edge case mentioned in the system prompt",
                 items: {
                   type: 'object',
                   properties: {
-                    missed_edge_case_coverage: {
+                    edge_case_coverage: {
                       type: 'string',
                       enum: [
                         "correct",
@@ -147,7 +148,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
                       ],
                       description: "Classify how well the user's explanation handles this edge case. 'correct' means it is explicitly mentioned and correctly explained. 'partial' means it is mentioned but lacks important details or justification. 'incorrect' means it is mentioned but the explanation is wrong or would fail for this edge case. 'missing' means the edge case is not mentioned at all."
                     },
-                    edge_case_missed_description: {
+                    missed_edge_case_description: {
                       type: 'string',
                       description: "The expected edge case associated to the missed_edge_case_coverage",
                       enum: edgeCases
@@ -166,6 +167,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
   });
 
   const data = await response.json();
+  console.log(data)
   console.log(typeof data.choices[0].message.content)
   const modelResp = JSON.parse(data.choices[0].message.content) as ModelResponse;
   return modelResp
@@ -175,7 +177,7 @@ let problem: Problem = {
   id: "1",
   title: "Two Sum II",
   description: "You are given a sorted array of integers in non-decreasing order and a target value. The task is to find exactly two distinct numbers whose sum equals the target and return their 1-based indices. The important twist is that the input is already sorted, so the ideal solution should exploit that structure instead of treating the problem like a generic pair-sum search.",
-  difficulty: 1,
+  difficulty: "easy",
   testCases: [
     "Input: numbers = [2,7,11,15], target = 9 -> Output: [1,2]. Explanation: 2 + 7 = 9, so the first two positions solve the problem.",
     "Input: numbers = [2,3,4], target = 6 -> Output: [1,3]. Explanation: 2 + 4 = 6, and the answer must use 1-based indexing.",

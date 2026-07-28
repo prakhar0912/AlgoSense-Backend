@@ -148,7 +148,7 @@ function normalizeShortSubmission(value: unknown): ShortSubmission {
       ? raw.id
       : ''
   submission.problem_id = typeof raw.problem_id === 'string' ? raw.problem_id : ''
-  submission.difficulty = toFiniteNumber(raw.difficulty)
+  submission.difficulty = raw.difficulty as "easy" | "medium" | "hard" | "expert"
   submission.timer = raw.timer === null || raw.timer === undefined ? null : toFiniteNumber(raw.timer)
   submission.approach_score = toFiniteNumber(raw.approach_score)
   submission.identified_approach = typeof raw.identified_approach === 'string' ? raw.identified_approach : ''
@@ -170,7 +170,8 @@ function normalizeScores(value: unknown): UserScores | null {
   scores.consistency_score = toFiniteNumber(raw.consistency_score)
   scores.edge_case_score = toFiniteNumber(raw.edge_case_score)
   scores.days_logged_in = toIsoStringArray(raw.days_logged_in)
-  scores.total_score = scores.approaches_score + scores.consistency_score + scores.edge_case_score
+  scores.total_score = toFiniteNumber(raw.total_score)
+  // scores.total_score = scores.approaches_score + scores.consistency_score + scores.edge_case_score
 
   return scores
 }
@@ -543,6 +544,13 @@ export default class UserDAO implements IUserDAO {
     const clauses: string[] = []
     const params: unknown[] = []
 
+    if (filters === undefined || filters === null) {
+      return {
+        whereClause: '',
+        params: [],
+      }
+    }
+
     for (const [rawKey, rawValue] of Object.entries(filters)) {
       if (rawValue === undefined) {
         continue
@@ -671,8 +679,8 @@ export default class UserDAO implements IUserDAO {
     const user = new User()
     user.id = row.id
     user.email = row.email
-    user.first_name = row.first_name ?? null
-    user.last_name = row.last_name ?? null
+    user.first_name = row.first_name ?? undefined
+    user.last_name = row.last_name ?? undefined
     user.role = row.role
     user.banned = row.banned
     user.scores = normalizeScores(row.scores)

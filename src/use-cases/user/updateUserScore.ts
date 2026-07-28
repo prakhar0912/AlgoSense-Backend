@@ -14,13 +14,13 @@ export default class UpdateUserScore implements IUseCase<Partial<UserScores>> {
     if (edgeCaseScore === null || typeof edgeCaseScore !== "number") {
       throw new InternalServerError('Edge Case Score not sent')
     }
-    const maxPossibleScore = 10
+    const maxPossibleScore = 100
     let mergedApproachScore = 0
     let mergedEdgeCaseScore = 0
-    if (approachScore > 10) {
+    if (approachScore > 100) {
       approachScore = 10
     }
-    if (edgeCaseScore > 10) {
+    if (edgeCaseScore > 100) {
       edgeCaseScore = 10
     }
     if (approachScore < 0) {
@@ -33,12 +33,12 @@ export default class UpdateUserScore implements IUseCase<Partial<UserScores>> {
 
     if (!userScores) {
       mergedApproachScore = ((approachScore) / (maxPossibleScore)) * 100
-      mergedEdgeCaseScore = edgeCaseScore * 100
+      mergedEdgeCaseScore = edgeCaseScore
     }
     else {
       const weightedApproachScore = ((approachScore) / (maxPossibleScore)) * 100
       mergedApproachScore = (userScores.approaches_score + weightedApproachScore) / 2
-      mergedEdgeCaseScore = (userScores.edge_case_score + (edgeCaseScore * 100)) / 2
+      mergedEdgeCaseScore = (userScores.edge_case_score + (edgeCaseScore)) / 2
     }
 
 

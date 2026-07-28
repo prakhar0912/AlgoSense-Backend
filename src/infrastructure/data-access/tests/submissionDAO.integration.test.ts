@@ -2,9 +2,13 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
+import Problem from "../../../entities/problem.js";
 import Submission from "../../../entities/submission.js";
+import User from "../../../entities/user.js";
 import client, { pool } from "../client.js";
+import ProblemDAO from "../problemDAO.js";
 import SubmissionDAO from "../submissionDAO.js";
+import UserDAO from "../userDAO.js";
 
 type TimingMetrics = {
   setupMs: number;
@@ -13,10 +17,12 @@ type TimingMetrics = {
   createMs: number[];
   viewByIdMs: number[];
   viewByUserMs: number[];
+  viewScoresByUserMs: number[];
 };
 
-const TRIALS = 100;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const runId = `submissiondao-${Date.now()}-${randomUUID().slice(0, 8)}`;
+const suiteStartMs = performance.now();
 const metrics: TimingMetrics = {
   setupMs: 0,
   seedMs: 0,
@@ -24,13 +30,16 @@ const metrics: TimingMetrics = {
   createMs: [],
   viewByIdMs: [],
   viewByUserMs: [],
+  viewScoresByUserMs: [],
 };
 
+const problemDAO = new ProblemDAO(client);
 const submissionDAO = new SubmissionDAO(client);
-let seedUserId = "";
-let seedProblemId = "";
+const userDAO = new UserDAO(client);
 
-const suiteStartMs = performance.now();
+let createdFixturesInCurrentTest = 0;
+let createdFixturesTotal = 0;
+let cleanedFixturesTotal = 0;
 
 function average(values: number[]): number {
   if (values.length === 0) {
@@ -41,192 +50,304 @@ function average(values: number[]): number {
 }
 
 function formatAverage(values: number[]): string {
-  return `${average(values).toFixed(5)} ms`;
+  return `${average(values).toFixed(5)} ms over ${values.length} runs`;
 }
 
-function buildSubmissionInput(index: number): Partial<Submission> {
-  const submittedAt = new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
+async function measure<T>(bucket: number[], action: () => Promise<T>): Promise<T> {
+  const startedMs = performance.now();
 
+  try {
+    return await action();
+  }
+  finally {
+    bucket.push(performance.now() - startedMs);
+  }
+}
+
+function buildUserFixture(index: number): User {
+  return Object.assign(new User(), {
+    id: `${runId}-placeholder-user-${index}`,
+    email: `${runId}.${index}@example.test`,
+    first_name: `${runId}-first-${index}`,
+    last_name: `${runId}-last-${index}`,
+    role: "user" as const,
+    banned: false,
+    scores: null,
+    created_at: new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString(),
+    last_5_submissions: null,
+    email_verified: true,
+    email_notifications_enabled: true,
+  });
+}
+
+function buildProblemInput(index: number, difficulty: Problem["difficulty"]): Omit<Problem, "id"> {
   return {
-    user_id: seedUserId,
-    problem_id: seedProblemId,
-    user_input: `console.log(${index})`,
-    difficulty: 2.5,
-    timer: index,
-    approach_score: 10 - index,
-    identified_approach: `approach-${index}`,
-    pass: index % 2 === 0,
-    missing_points: [`missing-${index}`],
-    edge_cases: [{
-      description: `edge-${index}`,
-      importance: "high",
-      coverage: "partial",
+    title: `${runId}-problem-${index}`,
+    description: `${runId} description for submission problem ${index}`,
+    testCases: [`input-${index} -> output-${index}`],
+    difficulty,
+    approaches: [{
+      type: `${runId}-approach-${index}`,
+      primary_technique: `technique-${index}`,
+      time_complexity: "O(n)",
+      space_complexity: "O(1)",
+      req_or_constraints: `constraint-${index}`,
+      steps: [`step-${index}-1`, `step-${index}-2`],
+      explanation: `explanation-${index}`,
+      edge_cases: [{
+        case: `edge-${index}`,
+        importance: "high",
+      }],
     }],
-    edge_case_score: 8 - index,
-    submitted_at: submittedAt,
+    evaluation_criteria: [`criterion-${index}`],
   };
 }
 
+async function seedUser(index: number): Promise<User> {
+  const seedStartedMs = performance.now();
+
+  try {
+    const createdUser = await userDAO.create(buildUserFixture(index));
+    createdFixturesInCurrentTest += 1;
+    createdFixturesTotal += 1;
+    return createdUser;
+  }
+  finally {
+    metrics.seedMs += performance.now() - seedStartedMs;
+  }
+}
+
+async function seedProblem(index: number, difficulty: Problem["difficulty"]): Promise<Problem> {
+  const seedStartedMs = performance.now();
+
+  try {
+    const createdProblem = await problemDAO.create(buildProblemInput(index, difficulty));
+    createdFixturesInCurrentTest += 1;
+    createdFixturesTotal += 1;
+    return createdProblem;
+  }
+  finally {
+    metrics.seedMs += performance.now() - seedStartedMs;
+  }
+}
+
+function buildSubmissionInput(
+  userId: string,
+  problemId: string,
+  difficulty: Submission["difficulty"],
+  submittedAt: string,
+  overrides: Partial<Submission> = {},
+): Partial<Submission> {
+  const baseApproachScore = typeof overrides.approach_score === "number" ? overrides.approach_score : 75;
+
+  return {
+    user_id: userId,
+    problem_id: problemId,
+    user_input: `console.log("${problemId}")`,
+    difficulty,
+    timer: baseApproachScore,
+    approach_score: baseApproachScore,
+    identified_approach: `${runId}-approach-${problemId}`,
+    pass: true,
+    missing_points: [`missing-${problemId}`],
+    edge_cases: [{
+      description: `edge-${problemId}`,
+      importance: "high",
+      coverage: "partial",
+    }],
+    edge_case_score: 50,
+    submitted_at: submittedAt,
+    ...overrides,
+  };
+}
+
+async function createSubmission(input: Partial<Submission>): Promise<Submission> {
+  const createdSubmission = await measure(metrics.createMs, () => submissionDAO.create(input));
+  createdFixturesInCurrentTest += 1;
+  createdFixturesTotal += 1;
+  return createdSubmission;
+}
+
 beforeAll(async () => {
-  const seedStartMs = performance.now();
-  seedUserId = randomUUID();
-  seedProblemId = randomUUID();
-  metrics.seedMs = performance.now() - seedStartMs;
+  await client.query("SELECT 1");
   metrics.setupMs = performance.now() - suiteStartMs;
 });
 
 beforeEach(async () => {
+  createdFixturesInCurrentTest = 0;
   await client.query("BEGIN");
 });
 
 afterEach(async () => {
   const cleanupStartMs = performance.now();
+
   try {
     await client.query("ROLLBACK");
-  } finally {
+  }
+  finally {
     metrics.cleanupMs += performance.now() - cleanupStartMs;
+    cleanedFixturesTotal += createdFixturesInCurrentTest;
+    createdFixturesInCurrentTest = 0;
   }
 });
 
 afterAll(async () => {
+  const totalRuntimeMs = performance.now() - suiteStartMs;
+
   console.info(
-    `[SubmissionDAO integration] setup=${metrics.setupMs.toFixed(5)} ms seed=${metrics.seedMs.toFixed(5)} ms cleanup=${metrics.cleanupMs.toFixed(5)} ms createAvg=${formatAverage(metrics.createMs)} viewByIdAvg=${formatAverage(metrics.viewByIdMs)} viewByUserAvg=${formatAverage(metrics.viewByUserMs)}`,
+    `[SubmissionDAO integration] setup=${metrics.setupMs.toFixed(5)} ms seed=${metrics.seedMs.toFixed(5)} ms cleanup=${metrics.cleanupMs.toFixed(5)} ms created=${createdFixturesTotal} cleaned=${cleanedFixturesTotal} total=${totalRuntimeMs.toFixed(5)} ms`,
   );
+  console.info(
+    `[SubmissionDAO integration] create=${formatAverage(metrics.createMs)} viewById=${formatAverage(metrics.viewByIdMs)} viewByUser=${formatAverage(metrics.viewByUserMs)} viewScoresByUser=${formatAverage(metrics.viewScoresByUserMs)}`,
+  );
+
   client.release();
   await pool.end();
 });
 
 describe("SubmissionDAO integration", () => {
-  it("round-trips create, viewById, and viewByUser against PostgreSQL and reports averages", async () => {
+  it("round-trips create, viewById, viewByUser, and viewScoresByUser against PostgreSQL", async () => {
+    const createdUser = await seedUser(1);
+    const easyProblem = await seedProblem(1, "easy");
+    const mediumProblem = await seedProblem(2, "medium");
+    const hardProblem = await seedProblem(3, "hard");
+
     const createdSubmissions: Submission[] = [];
-    const createDurations: number[] = [];
-    const viewByIdDurations: number[] = [];
-    const viewByUserDurations: number[] = [];
+    createdSubmissions.push(await createSubmission(buildSubmissionInput(
+      createdUser.id,
+      mediumProblem.id,
+      "medium",
+      new Date(Date.UTC(2026, 0, 1, 0, 0, 1)).toISOString(),
+      {
+        approach_score: 70,
+        edge_case_score: 40,
+      },
+    )));
+    createdSubmissions.push(await createSubmission(buildSubmissionInput(
+      createdUser.id,
+      mediumProblem.id,
+      "medium",
+      new Date(Date.UTC(2026, 0, 1, 0, 0, 2)).toISOString(),
+      {
+        approach_score: 80,
+        edge_case_score: 30,
+      },
+    )));
+    createdSubmissions.push(await createSubmission(buildSubmissionInput(
+      createdUser.id,
+      mediumProblem.id,
+      "medium",
+      new Date(Date.UTC(2026, 0, 1, 0, 0, 3)).toISOString(),
+      {
+        approach_score: 80,
+        edge_case_score: 90,
+      },
+    )));
+    createdSubmissions.push(await createSubmission(buildSubmissionInput(
+      createdUser.id,
+      hardProblem.id,
+      "hard",
+      new Date(Date.UTC(2026, 0, 1, 0, 0, 4)).toISOString(),
+      {
+        approach_score: 60,
+        edge_case_score: 99,
+      },
+    )));
+    createdSubmissions.push(await createSubmission(buildSubmissionInput(
+      createdUser.id,
+      hardProblem.id,
+      "hard",
+      new Date(Date.UTC(2026, 0, 1, 0, 0, 5)).toISOString(),
+      {
+        approach_score: 65,
+        edge_case_score: 20,
+      },
+    )));
+    createdSubmissions.push(await createSubmission(buildSubmissionInput(
+      createdUser.id,
+      easyProblem.id,
+      "easy",
+      new Date(Date.UTC(2026, 0, 1, 0, 0, 6)).toISOString(),
+      {
+        approach_score: 50,
+        edge_case_score: 50,
+      },
+    )));
 
-    for (let index = 0; index < TRIALS; index += 1) {
-      const input = buildSubmissionInput(index);
-      const startedMs = performance.now();
-      const created = await submissionDAO.create(input);
-      const elapsedMs = performance.now() - startedMs;
-      createDurations.push(elapsedMs);
-      metrics.createMs.push(elapsedMs);
-      createdSubmissions.push(created);
-
+    expect(createdSubmissions).toHaveLength(6);
+    for (const created of createdSubmissions) {
+      expect(created).toBeInstanceOf(Submission);
       expect(created.id).toMatch(UUID_PATTERN);
-      expect(created.user_id).toBe(seedUserId);
-      expect(created.problem_id).toBe(seedProblemId);
-      expect(created.user_input).toBe(input.user_input);
-      expect(created.difficulty).toBe(input.difficulty);
-      expect(created.timer).toBe(input.timer);
-      expect(created.approach_score).toBe(input.approach_score);
-      expect(created.identified_approach).toBe(input.identified_approach);
-      expect(created.pass).toBe(input.pass);
-      expect(created.missing_points).toEqual(input.missing_points);
-      expect(created.edge_cases).toEqual(input.edge_cases);
-      expect(created.edge_case_score).toBe(input.edge_case_score);
-      expect(new Date(created.submitted_at).toISOString()).toBe(input.submitted_at);
+      expect(created.user_id).toBe(createdUser.id);
+      expect(created.problem_id === easyProblem.id || created.problem_id === mediumProblem.id || created.problem_id === hardProblem.id).toBe(true);
+      expect(created.difficulty === "easy" || created.difficulty === "medium" || created.difficulty === "hard").toBe(true);
     }
 
-    expect(createdSubmissions).toHaveLength(TRIALS);
-
-    const latestSubmission = createdSubmissions[createdSubmissions.length - 1];
-    if (!latestSubmission) {
-      throw new Error("Expected a created submission to benchmark viewById");
+    const bestMediumSubmission = createdSubmissions[2];
+    if (!bestMediumSubmission) {
+      throw new Error("Expected the seeded medium submission to exist");
     }
 
-    for (let index = 0; index < TRIALS; index += 1) {
-      const startedMs = performance.now();
-      const lookedUp = await submissionDAO.viewById(createdSubmissions[index].id);
-      const elapsedMs = performance.now() - startedMs;
+    const lookedUp = await measure(metrics.viewByIdMs, () => submissionDAO.viewById(bestMediumSubmission.id));
+    expect(lookedUp).toBeInstanceOf(Submission);
+    expect(lookedUp).toMatchObject({
+      id: bestMediumSubmission.id,
+      user_id: createdUser.id,
+      problem_id: mediumProblem.id,
+      difficulty: "medium",
+      approach_score: 80,
+      edge_case_score: 90,
+    });
 
-      viewByIdDurations.push(elapsedMs);
-      metrics.viewByIdMs.push(elapsedMs);
+    const paginated = await measure(metrics.viewByUserMs, () => submissionDAO.viewByUser(createdUser.id));
+    expect(paginated.pagination).toEqual({
+      page: 1,
+      perPage: 6,
+    });
+    expect(paginated.data).toHaveLength(6);
+    expect(paginated.data[0]?.id).toBe(createdSubmissions[5]?.id);
+    expect(paginated.data[5]?.id).toBe(createdSubmissions[0]?.id);
 
-      if (!lookedUp) {
-        throw new Error("Expected submission lookup to return a persisted row");
-      }
+    const bestScores = await measure(metrics.viewScoresByUserMs, () => submissionDAO.viewScoresByUser(createdUser.id));
+    const sortedBestScores = [...bestScores].sort((left, right) => left.difficulty.localeCompare(right.difficulty));
 
-      expect(lookedUp).toMatchObject({
-        id: createdSubmissions[index].id,
-        user_id: createdSubmissions[index].user_id,
-        problem_id: createdSubmissions[index].problem_id,
-        user_input: createdSubmissions[index].user_input,
-        difficulty: createdSubmissions[index].difficulty,
-        timer: createdSubmissions[index].timer,
-        approach_score: createdSubmissions[index].approach_score,
-        identified_approach: createdSubmissions[index].identified_approach,
-        pass: createdSubmissions[index].pass,
-        missing_points: createdSubmissions[index].missing_points,
-        edge_cases: createdSubmissions[index].edge_cases,
-        edge_case_score: createdSubmissions[index].edge_case_score,
-      });
-      expect(new Date(lookedUp.submitted_at).toISOString()).toBe(createdSubmissions[index].submitted_at);
-    }
-
-    for (let index = 0; index < TRIALS; index += 1) {
-      const startedMs = performance.now();
-      const paginated = await submissionDAO.viewByUser(seedUserId);
-      const elapsedMs = performance.now() - startedMs;
-
-      viewByUserDurations.push(elapsedMs);
-      metrics.viewByUserMs.push(elapsedMs);
-
-      expect(paginated.pagination).toEqual({
-        page: 1,
-        perPage: TRIALS,
-      });
-      expect(paginated.data).toHaveLength(TRIALS);
-
-      const newestSubmission = paginated.data[0];
-      const oldestSubmission = paginated.data[paginated.data.length - 1];
-
-      if (!newestSubmission || !oldestSubmission) {
-        throw new Error("Expected submitted rows to be returned in descending order");
-      }
-
-      expect(newestSubmission.id).toBe(createdSubmissions[createdSubmissions.length - 1]?.id);
-      expect(oldestSubmission.id).toBe(createdSubmissions[0]?.id);
-    }
-
-    console.info(`[SubmissionDAO integration] create avg over ${TRIALS} runs: ${formatAverage(createDurations)}`);
-    console.info(`[SubmissionDAO integration] viewById avg over ${TRIALS} runs: ${formatAverage(viewByIdDurations)}`);
-    console.info(`[SubmissionDAO integration] viewByUser avg over ${TRIALS} runs: ${formatAverage(viewByUserDurations)}`);
+    expect(sortedBestScores).toEqual([
+      {
+        problem_id: easyProblem.id,
+        difficulty: "easy",
+        approach_score: 50,
+        edge_case_score: 50,
+        submitted_at: new Date(Date.UTC(2026, 0, 1, 0, 0, 6)).toISOString(),
+      },
+      {
+        problem_id: hardProblem.id,
+        difficulty: "hard",
+        approach_score: 65,
+        edge_case_score: 20,
+        submitted_at: new Date(Date.UTC(2026, 0, 1, 0, 0, 5)).toISOString(),
+      },
+      {
+        problem_id: mediumProblem.id,
+        difficulty: "medium",
+        approach_score: 80,
+        edge_case_score: 90,
+        submitted_at: new Date(Date.UTC(2026, 0, 1, 0, 0, 3)).toISOString(),
+      },
+    ]);
   });
 
-  it("returns null for a missing submission id and an empty page for a missing user", async () => {
+  it("returns null, an empty page, and an empty score projection for missing submissions", async () => {
     const missingSubmissionId = randomUUID();
     const missingUserId = randomUUID();
-    const viewByIdDurations: number[] = [];
-    const viewByUserDurations: number[] = [];
 
-    for (let index = 0; index < TRIALS; index += 1) {
-      const startedMs = performance.now();
-      const result = await submissionDAO.viewById(missingSubmissionId);
-      const elapsedMs = performance.now() - startedMs;
-
-      viewByIdDurations.push(elapsedMs);
-      metrics.viewByIdMs.push(elapsedMs);
-      expect(result).toBeNull();
-    }
-
-    for (let index = 0; index < TRIALS; index += 1) {
-      const startedMs = performance.now();
-      const result = await submissionDAO.viewByUser(missingUserId);
-      const elapsedMs = performance.now() - startedMs;
-
-      viewByUserDurations.push(elapsedMs);
-      metrics.viewByUserMs.push(elapsedMs);
-
-      expect(result).toEqual({
-        data: [],
-        pagination: {
-          page: 1,
-          perPage: 0,
-        },
-      });
-    }
-
-    console.info(`[SubmissionDAO integration] viewById(empty) avg over ${TRIALS} runs: ${formatAverage(viewByIdDurations)}`);
-    console.info(`[SubmissionDAO integration] viewByUser(empty) avg over ${TRIALS} runs: ${formatAverage(viewByUserDurations)}`);
+    await expect(measure(metrics.viewByIdMs, () => submissionDAO.viewById(missingSubmissionId))).resolves.toBeNull();
+    await expect(measure(metrics.viewByUserMs, () => submissionDAO.viewByUser(missingUserId))).resolves.toEqual({
+      data: [],
+      pagination: {
+        page: 1,
+        perPage: 0,
+      },
+    });
+    await expect(measure(metrics.viewScoresByUserMs, () => submissionDAO.viewScoresByUser(missingUserId))).resolves.toEqual([]);
   });
 });

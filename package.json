@@ -4,29 +4,40 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
+    "dev": "nodemon",
+    "build": "ts",
+    "start": "node dist/app.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/method-override": "^3.0.0",
+    "@types/morgan": "^1.9.10",
     "@types/node": "^26.1.0",
     "@types/pg": "^8.20.0",
     "jest": "^30.4.2",
+    "nodemon": "^3.1.14",
     "ts-jest": "^29.4.11",
+    "ts-node": "^10.9.2",
     "typescript": "^6.0.3"
   },
   "dependencies": {
     "argon2": "^0.44.0",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "express-oauth2-jwt-bearer": "^1.9.1",
     "isomorphic-dompurify": "^3.18.0",
     "jsonwebtoken": "^9.0.3",
+    "method-override": "^3.0.0",
+    "morgan": "^1.11.0",
     "openai": "^6.48.0",
     "pg": "^8.22.0",
     "zod": "^4.4.3"

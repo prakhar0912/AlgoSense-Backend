@@ -1,0 +1,28 @@
+import UnauthorizedError from "../../errors/unauthorizedError.js";
+import type IUseCase from "../../interfaces/useCase.js";
+import InternalServerError from "../../errors/internalServerError.js";
+import type IPaginated from "../../interfaces/paginated.js";
+import type Submission from "../../entities/submission.js";
+import type ISubmissionDAO from "../../interfaces/submission/submissionDAO.js";
+
+
+
+export default class GetSubmissionsById implements IUseCase<IPaginated<Submission>> {
+  constructor(
+    private submissionDAO: ISubmissionDAO
+  ) { }
+  async call(userId: string) {
+    if (typeof userId !== "string" || typeof userId === "string" && userId.length === 0) {
+      throw new UnauthorizedError('Please provide a UserId to authenticate')
+    }
+    let submissions
+    try {
+      submissions = await this.submissionDAO.viewByUser(userId)
+    }
+    catch (e) {
+      throw new InternalServerError('Error while fetching user from DB')
+    }
+    return submissions
+
+  }
+}

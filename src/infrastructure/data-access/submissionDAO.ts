@@ -7,6 +7,15 @@ import type IPaginated from "../../interfaces/paginated.js";
 import type ISubmissionDAO from "../../interfaces/submission/submissionDAO.js";
 
 type DbClient = Pick<PoolClient, "query">;
+type SubmissionDifficulty = Submission["difficulty"];
+type SubmissionScoreView = Pick<Submission, "problem_id" | "difficulty" | "approach_score" | "edge_case_score" | "submitted_at">;
+type SubmissionEdgeCaseImportance = "critical" | "high" | "medium" | "low";
+type SubmissionEdgeCaseCoverage = "correct" | "partial" | "incorrect" | "missing";
+type SubmissionEdgeCase = {
+  description: string;
+  importance: SubmissionEdgeCaseImportance;
+  coverage: SubmissionEdgeCaseCoverage;
+};
 
 type SubmissionRow = QueryResultRow & {
   id: string;
@@ -22,6 +31,14 @@ type SubmissionRow = QueryResultRow & {
   edge_cases: unknown;
   edge_cases_missed?: unknown;
   edge_case_score: number | string;
+  submitted_at: string | Date | null;
+};
+
+type SubmissionScoreRow = QueryResultRow & {
+  problem_id: string;
+  difficulty: number | string;
+  approach_score: number | string | null;
+  edge_case_score: number | string | null;
   submitted_at: string | Date | null;
 };
 
@@ -83,6 +100,16 @@ function toFiniteNumber(value: unknown): number {
   return 0;
 }
 
+function toDifficulty(value: unknown): SubmissionDifficulty {
+  const parsed = typeof value === "string" ? value : String(value);
+
+  if (parsed === "easy" || parsed === "medium" || parsed === "hard" || parsed === "expert") {
+    return parsed;
+  }
+
+  return "easy";
+}
+
 function toMissingPointsArray(value: unknown): string[] {
   if (typeof value === "string") {
     return value.trim().length > 0 ? [value] : [];
@@ -95,18 +122,28 @@ function toMissingPointsArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-type SubmissionEdgeCase = {
-  description: string;
-  importance: string;
-  coverage: string;
-};
+function toEdgeCaseImportance(value: unknown): SubmissionEdgeCaseImportance {
+  if (value === "critical" || value === "high" || value === "medium" || value === "low") {
+    return value;
+  }
+
+  return "low";
+}
+
+function toEdgeCaseCoverage(value: unknown): SubmissionEdgeCaseCoverage {
+  if (value === "correct" || value === "partial" || value === "incorrect" || value === "missing") {
+    return value;
+  }
+
+  return "missing";
+}
 
 function normalizeEdgeCase(value: unknown): SubmissionEdgeCase | null {
   if (isRecord(value)) {
     return {
       description: typeof value.description === "string" ? value.description : "",
-      importance: typeof value.importance === "string" ? value.importance : "",
-      coverage: typeof value.coverage === "string" ? value.coverage : "",
+      importance: toEdgeCaseImportance(value.importance),
+      coverage: toEdgeCaseCoverage(value.coverage),
     };
   }
 
@@ -121,23 +158,23 @@ function normalizeEdgeCase(value: unknown): SubmissionEdgeCase | null {
       if (isRecord(parsed)) {
         return {
           description: typeof parsed.description === "string" ? parsed.description : "",
-          importance: typeof parsed.importance === "string" ? parsed.importance : "",
-          coverage: typeof parsed.coverage === "string" ? parsed.coverage : "",
+          importance: toEdgeCaseImportance(parsed.importance),
+          coverage: toEdgeCaseCoverage(parsed.coverage),
         };
       }
     }
     catch {
       return {
         description: value,
-        importance: "",
-        coverage: "",
+        importance: "low",
+        coverage: "missing",
       };
     }
 
     return {
       description: value,
-      importance: "",
-      coverage: "",
+      importance: "low",
+      coverage: "missing",
     };
   }
 
@@ -145,6 +182,21 @@ function normalizeEdgeCase(value: unknown): SubmissionEdgeCase | null {
 }
 
 function toEdgeCaseArray(value: unknown): SubmissionEdgeCase[] {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) {
+      return [];
+    }
+
+    try {
+      const parsed = JSON.parse(trimmed);
+      return Array.isArray(parsed) ? toEdgeCaseArray(parsed) : [];
+    }
+    catch {
+      return [];
+    }
+  }
+
   if (!Array.isArray(value)) {
     return [];
   }
@@ -156,6 +208,16 @@ function buildSelectColumns(): string {
   return SUBMISSION_COLUMNS.join(", ");
 }
 
+function normalizeSubmissionScoreRow(row: SubmissionScoreRow): SubmissionScoreView {
+  return {
+    problem_id: row.problem_id,
+    difficulty: toDifficulty(row.difficulty),
+    approach_score: toFiniteNumber(row.approach_score),
+    edge_case_score: toFiniteNumber(row.edge_case_score),
+    submitted_at: toIsoString(row.submitted_at),
+  };
+}
+
 function normalizeSubmissionRow(row: SubmissionRow): Submission {
   const submission = new Submission();
   const raw: Record<string, unknown> = isRecord(row) ? row : {};
@@ -163,7 +225,7 @@ function normalizeSubmissionRow(row: SubmissionRow): Submission {
   submission.id = typeof raw.id === "string" ? raw.id : row.id;
   submission.user_id = typeof raw.user_id === "string" ? raw.user_id : row.user_id;
   submission.problem_id = typeof raw.problem_id === "string" ? raw.problem_id : row.problem_id;
-  submission.difficulty = toFiniteNumber(raw.difficulty ?? row.difficulty);
+  submission.difficulty = toDifficulty(raw.difficulty ?? row.difficulty);
   submission.user_input = typeof raw.user_input === "string" ? raw.user_input : row.user_input;
   submission.timer = raw.timer === null || raw.timer === undefined ? null : toFiniteNumber(raw.timer);
 
@@ -200,21 +262,21 @@ export default class SubmissionDAO implements ISubmissionDAO {
         edge_case_score,
         submitted_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::text[], $10::jsonb[], $11, $12)
+      VALUES ($1, $2, $3::difficulty_enum, $4, $5, $6, $7, $8, $9::text[], $10::jsonb[], $11, $12)
       RETURNING ${buildSelectColumns()}
     `;
 
     const params = [
       submissionPayload.user_id,
       submissionPayload.problem_id,
-      submissionPayload.difficulty,
+      String(submissionPayload.difficulty),
       submissionPayload.user_input,
       submissionPayload.timer ?? null,
       submissionPayload.approach_score ?? null,
       submissionPayload.identified_approach ?? "",
       submissionPayload.pass ?? false,
       toMissingPointsArray(submissionPayload.missing_points),
-      submissionPayload.edge_cases ?? [],
+      toEdgeCaseArray(submissionPayload.edge_cases),
       submissionPayload.edge_case_score ?? null,
       submissionPayload.submitted_at ? toIsoString(submissionPayload.submitted_at) : new Date().toISOString(),
     ];
@@ -259,5 +321,28 @@ export default class SubmissionDAO implements ISubmissionDAO {
         perPage: result.rows.length,
       },
     };
+  }
+
+  async viewScoresByUser(userId: string): Promise<SubmissionScoreView[]> {
+    const result = await this.db.query<SubmissionScoreRow>(
+      `
+        SELECT problem_id, difficulty, approach_score, edge_case_score, submitted_at
+        FROM (
+          SELECT DISTINCT ON (problem_id)
+            problem_id,
+            difficulty,
+            approach_score,
+            edge_case_score,
+            submitted_at
+          FROM submissions
+          WHERE user_id = $1
+          ORDER BY problem_id, approach_score DESC NULLS LAST, edge_case_score DESC NULLS LAST, submitted_at DESC NULLS LAST, id DESC
+        ) best_submissions
+        ORDER BY approach_score DESC NULLS LAST, edge_case_score DESC NULLS LAST, difficulty ASC
+      `,
+      [userId],
+    );
+
+    return result.rows.map((row) => normalizeSubmissionScoreRow(row));
   }
 }

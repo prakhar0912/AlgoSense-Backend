@@ -6,7 +6,7 @@ import type IPaginated from "../../interfaces/paginated.js";
 import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
 
 type DbClient = Pick<PoolClient, "query">;
-type ProblemApproach = Problem["approaches"][number];
+
 
 type ProblemRow = QueryResultRow & {
   id: string;
@@ -73,22 +73,22 @@ function toStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function toApproachArray(value: unknown): ProblemApproach[] {
+function toApproachArray(value: Problem['approaches']): Problem['approaches'] {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  return value.filter(isRecord) as ProblemApproach[];
+  return value.filter(isRecord);
 }
 
 function toDifficulty(value: unknown): Problem["difficulty"] {
-  const parsed = typeof value === "number" ? value : Number(value);
+  const parsed = typeof value === "string" ? value : String(value);
 
-  if (parsed === 1 || parsed === 2.5 || parsed === 6 || parsed === 7) {
+  if (parsed === "easy" || parsed === "medium" || parsed === "hard" || parsed === "expert") {
     return parsed;
   }
 
-  return 1;
+  return "easy";
 }
 
 function normalizeProblemRow(row: ProblemRow): Problem {
@@ -99,7 +99,7 @@ function normalizeProblemRow(row: ProblemRow): Problem {
   problem.description = row.description;
   problem.testCases = toStringArray(row.testCases);
   problem.difficulty = toDifficulty(row.difficulty);
-  problem.approaches = toApproachArray(row.approaches);
+  problem.approaches = toApproachArray(row.approaches as Problem['approaches'])
   problem.evaluation_criteria = toStringArray(row.evaluation_criteria);
 
   return problem;

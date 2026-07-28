@@ -15,6 +15,14 @@ import type UpdateConsistencyScore from "../use-cases/user/updateConsistencyScor
 import type UpdateUserScore from "../use-cases/user/updateUserScore.js";
 import type UpdateUserProfile from "../use-cases/user/updateUserSettings.js";
 import type RegisterUser from "../use-cases/user/register.js";
+import type GetSubmissionsById from "../use-cases/user/getSubmissionsById.js";
+
+type OptionalWithUndefined<T> = {
+  [K in keyof T]?: T[K] | undefined
+}
+type UserSettingsValues = OptionalWithUndefined<Partial<Pick<User, | 'first_name' | 'last_name' | 'email_notifications_enabled'>>>
+
+
 
 export default class UserController {
   constructor(
@@ -25,8 +33,9 @@ export default class UserController {
     protected updateUserScore: UpdateUserScore,
     protected updateUserSettings: UpdateUserProfile,
     protected createUser: RegisterUser,
+    protected getSubmissionsById: GetSubmissionsById,
     // Validators
-    protected profileDataValidator: IValidator<profileDataTypes>,
+    protected profileDataValidator: IValidator<UserSettingsValues | null | undefined>,
 
   ) { }
 
@@ -46,6 +55,15 @@ export default class UserController {
   }
 
   //Helper Functions above
+
+  async getUserSubmissions(request: IRequest) {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+    return await this.getSubmissionsById.call(request.userId)
+
+  }
+
   async newUserRegistration(request: IRequest): Promise<User | null> {
     type UserCreationPayload = {
       id: string
@@ -103,7 +121,12 @@ export default class UserController {
     return await this.deleteSelf.call(request.userId)
   }
 
-
+  async getProfile(request: IRequest) {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+    return await this.findUserbyId.call(request.userId)
+  }
 
   async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: UserScores | null | undefined, newScores: UserScores }> {
     if (!request.userId) {
@@ -133,14 +156,14 @@ export default class UserController {
     if (typeof result.approach_score !== "number" || typeof result.edge_case_score !== "number") {
       throw new InternalServerError("Recieved malformed data from model response")
     }
-    const newScores = await this.updateUserScore.call(user.id, user.scores, result.approach_score, result.edge_case_score)
-    if (!newScores) {
+    const newUser = await this.findUserbyId.call(user.id)
+    if (!newUser || !newUser.scores) {
       throw new InternalServerError("Didn't get good response from solution submitter")
     }
     return {
       result,
       prevScores: user.scores,
-      newScores
+      newScores: newUser.scores
     }
   }
 

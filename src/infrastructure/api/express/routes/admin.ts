@@ -2,45 +2,95 @@ import express from 'express'
 import type { NextFunction, Request, Response } from 'express'
 import services from '../../../../config/services.js'
 import AdminController from '../../../../controllers/admin.js'
-import { AuthorizeAdmin, DeleteUser, ListUsers, UpdateUser } from '../../../../use-cases/user/index.js'
+import { CreateProblem, DeleteProblem, ListUsers, RemoveUser, ToggleBanUser, UpdateUser } from '../../../../use-cases/admin/index.js'
+import { ListProblems, GetProblem } from '../../../../use-cases/user/index.js'
+import ProblemController from '../../../../controllers/problem.js'
+
+// TODO: Implement seeing submissions of a user
 
 const userDAO = new services.user.DAO()
+const problemDAO = new services.problem.DAO()
 
-const controller = new AdminController(
-  new AuthorizeAdmin(userDAO, services.utils.verifyToken),
+
+const adminController = new AdminController(
   new ListUsers(userDAO),
-  new UpdateUser(services.user.validators.adminValidator, userDAO, services.utils.encryptPassword),
-  new DeleteUser(userDAO),
+  new RemoveUser(userDAO),
+  new ToggleBanUser(userDAO),
+  new UpdateUser(userDAO, services.user.validators.updateUserValidator),
+
+  services.user.validators.filterUsers,
+  services.user.validators.registerValidator,
+)
+
+const problemController = new ProblemController(
+  new ListProblems(problemDAO),
+  new GetProblem(problemDAO),
+  new CreateProblem(problemDAO, services.problem.validators.problemValidator),
+  new DeleteProblem(problemDAO),
+
+  services.problem.validators.problemValidator,
 )
 
 const router = express.Router()
 
-router.use((req: Request, _res: Response, next: NextFunction) => {
-  const token = [...(req.headers['authorization']?.split(' ') || [])].pop() || ''
-  Object.assign(req, { token })
-  next()
-})
-
-router.get('/users', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/problems', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = (req as unknown as { token: string }).token
     const { page, perPage } = req.query as unknown as { page: number; perPage: number }
-    const result = await controller.users({ token, params: { page, perPage } })
+    const result = await problemController.getPaginatedProblems({ params: { page, perPage } })
     res.send(result)
   } catch (err) {
     next(err)
   }
 })
 
-router.put('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
+
+router.get('/problem/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = (req as unknown as { token: string }).token
     if (req.params.id === undefined) {
       throw new Error('User ID is required')
     }
-    const id = parseInt(String(req.params.id))
+    const id = String(req.params.id)
+    const { page, perPage } = req.query as unknown as { page: number; perPage: number }
+    const result = await problemController.getProblemById({ params: { id, page, perPage } })
+    res.send(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.post('/problem/create', async (req: Request, res: Response, next: NextFunction) => {
+  const result = await problemController.addProblem({ body: req.body })
+  res.send(result)
+})
+
+router.delete('/problem/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.params.id === undefined) {
+      throw new Error('Problem ID is required')
+    }
+    const id = String(req.params.id)
+    const success = await problemController.deleteProblemById({ params: { id } })
+    res.send({ success })
+  } catch (err) {
+    next(err)
+  }
+})
+
+
+router.get('/users', async (req: Request, res: Response, next: NextFunction) => {
+  const { page, perPage } = req.query as unknown as { page: number; perPage: number }
+  const result = await adminController.listFilteredUsers({ params: { page, perPage }, body: req.body })
+  res.send(result)
+})
+
+router.put('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (req.params.id === undefined) {
+      throw new Error('User ID is required')
+    }
+    const id = String(req.params.id)
     const body = req.body
-    const success = await controller.usersUpdate({ token, body, params: { id } })
+    const success = await adminController.updateUserById({ body, params: { id } })
     res.send({ success })
   } catch (err) {
     next(err)
@@ -49,12 +99,11 @@ router.put('/users/:id', async (req: Request, res: Response, next: NextFunction)
 
 router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const token = (req as unknown as { token: string }).token
     if (req.params.id === undefined) {
       throw new Error('User ID is required')
     }
-    const id = parseInt(String(req.params.id))
-    const success = await controller.usersDelete({ token, params: { id } })
+    const id = String(req.params.id)
+    const success = await adminController.deleteUser({ params: { id } })
     res.send({ success })
   } catch (err) {
     next(err)

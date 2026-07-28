@@ -4,7 +4,7 @@ export default interface ModelResponse {
   user_explanation_pass: boolean,
   missing_points_in_user_explanation: string,
   edge_cases_missed_in_user_explanation: {
-    missed_edge_case_coverage: "correct" | "incorrect" | "missing" | "partial",
-    edge_case_missed_description: string,
+    edge_case_coverage: "correct" | "incorrect" | "missing" | "partial",
+    missed_edge_case_description: string,
   }[] | []
 };

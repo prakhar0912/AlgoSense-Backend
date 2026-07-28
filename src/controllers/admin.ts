@@ -1,10 +1,34 @@
+import type ShortSubmission from "../entities/shortSubmission.js";
 import type User from "../entities/user.js";
+import type UserScores from "../entities/userScores.js";
 import InternalServerError from "../errors/internalServerError.js";
 import ValidationError from "../errors/validationError.js";
 import type IPaginated from "../interfaces/paginated.js";
 import type IRequest from "../interfaces/request.js";
 import type IUseCase from "../interfaces/useCase.js";
 import type IValidator from "../interfaces/validator.js";
+
+
+type OptionalWithUndefined<T> = {
+  [K in keyof T]?: T[K] | undefined
+}
+type FilterUserPayload =
+  Omit<Partial<User>, "scores" |
+    "last_5_submissions"> & {
+      scores?: OptionalWithUndefined<Partial<UserScores>> | null;
+      last_5_submissions?:
+      OptionalWithUndefined<Partial<ShortSubmission>>[] | null;
+    };
+
+type UpdateUserPayload =
+  Omit<Partial<User>, 'id' | 'created_at' | "scores" |
+    "last_5_submissions"> & {
+      scores?: OptionalWithUndefined<Partial<UserScores>> | null;
+      last_5_submissions?:
+      OptionalWithUndefined<Partial<ShortSubmission>>[] | null;
+    };
+
+
 
 export default class AdminController {
   constructor(
@@ -13,8 +37,8 @@ export default class AdminController {
     protected toggleBanUser: IUseCase<User>,
     protected updateUser: IUseCase<User>,
 
-    protected userFiltersDataTypeValidator: IValidator<User>,
-    protected updateUserDataTypeValidator: IValidator<User>
+    protected userFiltersDataTypeValidator: IValidator<OptionalWithUndefined<FilterUserPayload> | null | undefined>,
+    protected updateUserDataTypeValidator: IValidator<OptionalWithUndefined<UpdateUserPayload> | null | undefined>
 
   ) { }
 
@@ -46,7 +70,7 @@ export default class AdminController {
     } catch (e) {
       throw new InternalServerError('User Filter Data Validation Function Failed', e)
     }
-    if (!validationResult.success || !validationResult.data || validationResult.errors) {
+    if (!validationResult.success || validationResult.errors) {
       throw new ValidationError('Invalid User Filter Data', validationResult.errors)
     }
 
@@ -55,7 +79,7 @@ export default class AdminController {
   }
 
   async deleteUser(request: IRequest): Promise<boolean> {
-    let userId = request.params?.Id
+    let userId = request.params?.id
     if (!userId || typeof userId !== "string") {
       throw new ValidationError('User Id is required')
     }
@@ -90,7 +114,7 @@ export default class AdminController {
       throw new InternalServerError('Problem Data Validation Function Failed', e)
     }
     if (!validationResult.success || !validationResult.data || validationResult.errors) {
-      throw new ValidationError('Invalid Problem Data', validationResult.errors)
+      throw new ValidationError('Invalid User Data', validationResult.errors)
     }
 
     const userId = request.params?.id

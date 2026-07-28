@@ -4,8 +4,8 @@ import ShortSubmission from "./shortSubmission.js"
 export default class User {
   id!: string
   email!: string
-  first_name?: string | null
-  last_name?: string | null
+  first_name?: string | undefined
+  last_name?: string | undefined
   role!: 'admin' | 'user'
   banned!: boolean
   scores?: UserScores | null

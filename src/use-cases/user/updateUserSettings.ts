@@ -5,12 +5,16 @@ import type IUseCase from "../../interfaces/useCase.js";
 import type IUserDAO from "../../interfaces/user/userDAO.js";
 import type IValidator from "../../interfaces/validator.js";
 
-type UserSettingsValues = Partial<Pick<User, | 'first_name' | 'last_name' | 'email_notifications_enabled'>>
+
+type OptionalWithUndefined<T> = {
+  [K in keyof T]?: T[K] | undefined
+}
+type UserSettingsValues = OptionalWithUndefined<Partial<Pick<User, | 'first_name' | 'last_name' | 'email_notifications_enabled'>>>
 
 export default class UpdateUserProfile implements IUseCase<User> {
   constructor(
     private userDAO: IUserDAO,
-    private validateUserProfile: IValidator<UserSettingsValues>
+    private validateUserProfile: IValidator<UserSettingsValues | null | undefined>
   ) { }
   async call(userId: string, updatedValues: UserSettingsValues) {
     let validationResult
@@ -25,7 +29,7 @@ export default class UpdateUserProfile implements IUseCase<User> {
 
     let updatedUserProfile: User
     try {
-      updatedUserProfile = await this.userDAO.update(userId, validationResult.data)
+      updatedUserProfile = await this.userDAO.update(userId, validationResult.data as Partial<Pick<User, | 'first_name' | 'last_name' | 'email_notifications_enabled'>>)
     }
     catch (e) {
       throw new InternalServerError('Unable to update user profile', e)

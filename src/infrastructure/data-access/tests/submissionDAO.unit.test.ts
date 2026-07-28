@@ -32,12 +32,17 @@ type SubmissionRow = QueryResultRow & {
   submitted_at: string | Date | null;
 };
 
+type SubmissionScoreRow = QueryResultRow & Pick<
+  SubmissionRow,
+  "problem_id" | "difficulty" | "approach_score" | "edge_case_score" | "submitted_at"
+>;
+
 function buildSubmissionRow(overrides: Partial<SubmissionRow> = {}): SubmissionRow {
   return {
     id: "submission-123",
     user_id: "user-123",
     problem_id: "problem-123",
-    difficulty: 2.5,
+    difficulty: "medium",
     user_input: "console.log('hello')",
     timer: 12,
     approach_score: 9,
@@ -56,7 +61,7 @@ function buildSubmission(overrides: Partial<Submission> = {}): Submission {
     id: "submission-123",
     user_id: "user-123",
     problem_id: "problem-123",
-    difficulty: 2.5,
+    difficulty: "medium",
     user_input: "console.log('hello')",
     timer: 12,
     approach_score: 9,
@@ -88,7 +93,7 @@ describe("SubmissionDAO unit", () => {
       id: "submission-123",
       user_id: "user-123",
       problem_id: "problem-123",
-      difficulty: 2.5,
+      difficulty: "medium",
       user_input: "console.log('hello')",
       timer: 12,
       approach_score: 9,
@@ -113,13 +118,15 @@ describe("SubmissionDAO unit", () => {
     if (!call) {
       throw new Error("Expected the DAO to issue one insert query");
     }
+
     const [sql, params] = call;
     expect(sql).toContain("INSERT INTO submissions");
+    expect(sql).toContain("difficulty_enum");
     expect(sql).toContain("RETURNING");
     expect(params).toEqual([
       payload.user_id,
       payload.problem_id,
-      payload.difficulty,
+      String(payload.difficulty),
       payload.user_input,
       payload.timer,
       payload.approach_score,
@@ -131,6 +138,59 @@ describe("SubmissionDAO unit", () => {
       payload.submitted_at,
     ]);
     expect(result).toEqual(buildSubmission());
+  });
+
+  it("returns one best score projection per problem for a user", async () => {
+    const scoreRows: SubmissionScoreRow[] = [
+      {
+        problem_id: "problem-777",
+        difficulty: "hard",
+        approach_score: "95",
+        edge_case_score: "83",
+        submitted_at: "2026-01-07T00:00:00.000Z",
+      },
+      {
+        problem_id: "problem-555",
+        difficulty: "medium",
+        approach_score: 90,
+        edge_case_score: "70",
+        submitted_at: "2026-01-05T00:00:00.000Z",
+      },
+    ];
+
+    query.mockResolvedValueOnce({
+      rows: scoreRows,
+      rowCount: scoreRows.length,
+    } as never);
+
+    const result = await submissionDAO.viewScoresByUser("user-123");
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const call = query.mock.calls[0];
+    if (!call) {
+      throw new Error("Expected the DAO to issue one score projection query");
+    }
+
+    const [sql, params] = call;
+    expect(sql).toContain("DISTINCT ON (problem_id)");
+    expect(sql).toContain("WHERE user_id = $1");
+    expect(params).toEqual(["user-123"]);
+    expect(result).toEqual([
+      {
+        problem_id: "problem-777",
+        difficulty: "hard",
+        approach_score: 95,
+        edge_case_score: 83,
+        submitted_at: "2026-01-07T00:00:00.000Z",
+      },
+      {
+        problem_id: "problem-555",
+        difficulty: "medium",
+        approach_score: 90,
+        edge_case_score: 70,
+        submitted_at: "2026-01-05T00:00:00.000Z",
+      },
+    ]);
   });
 
   it("returns null when no submission exists for an id", async () => {
@@ -166,6 +226,7 @@ describe("SubmissionDAO unit", () => {
     if (!call) {
       throw new Error("Expected the DAO to issue one select query");
     }
+
     const [sql, params] = call;
     expect(sql).toContain("FROM submissions");
     expect(sql).toContain("ORDER BY submitted_at DESC, id DESC");
@@ -198,7 +259,7 @@ describe("SubmissionDAO unit", () => {
         id: "submission-123",
         user_id: "user-123",
         problem_id: "problem-123",
-        difficulty: 2.5,
+        difficulty: "medium",
         user_input: "console.log('hello')",
         timer: 12,
         approach_score: 9,

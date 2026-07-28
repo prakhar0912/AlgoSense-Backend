@@ -12,10 +12,10 @@ export default class ProblemController {
     protected getProblem: IUseCase<Problem>,
     protected createProblem: IUseCase<Problem>,
     protected deleteProblem: IUseCase<boolean>,
-    protected updateProblem: IUseCase<Problem>,
+    // protected updateProblem: IUseCase<Problem>,
 
-    protected addProblemDataTypeValidator: IValidator<Problem>,
-    protected updateProblemDataTypeValidator: IValidator<Problem>,
+    protected addProblemDataTypeValidator: IValidator<Omit<Problem, 'id'>>,
+    // protected updateProblemDataTypeValidator: IValidator<Problem>,
   ) { }
 
 
@@ -81,24 +81,24 @@ export default class ProblemController {
     return problem
   }
 
-  async updateProblemById(request: IRequest): Promise<Problem> {
-
-    let validationResult
-    try {
-      validationResult = this.updateProblemDataTypeValidator.validate(request.body as Partial<Problem>)
-    } catch (e) {
-      throw new InternalServerError('Problem Data Validation Function Failed', e)
-    }
-    if (!validationResult.success || !validationResult.data || validationResult.errors) {
-      throw new ValidationError('Invalid Problem Data', validationResult.errors)
-    }
-    const problemId = request.params?.id
-    if (!problemId || typeof problemId !== "string") {
-      throw new ValidationError('Problem ID is required')
-    }
-
-    const users = await this.updateProblem.call(problemId, validationResult.data)
-    return users
-
-  }
+  // async updateProblemById(request: IRequest): Promise<Problem> {
+  //
+  //   let validationResult
+  //   try {
+  //     validationResult = this.updateProblemDataTypeValidator.validate(request.body as Partial<Problem>)
+  //   } catch (e) {
+  //     throw new InternalServerError('Problem Data Validation Function Failed', e)
+  //   }
+  //   if (!validationResult.success || !validationResult.data || validationResult.errors) {
+  //     throw new ValidationError('Invalid Problem Data', validationResult.errors)
+  //   }
+  //   const problemId = request.params?.id
+  //   if (!problemId || typeof problemId !== "string") {
+  //     throw new ValidationError('Problem ID is required')
+  //   }
+  //
+  //   const users = await this.updateProblem.call(problemId, validationResult.data)
+  //   return users
+  //
+  // }
 }

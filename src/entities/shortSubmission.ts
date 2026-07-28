@@ -1,7 +1,7 @@
 export default class ShortSubmission {
   submission_id!: string
   problem_id!: string
-  difficulty!: number
+  difficulty!: "easy" | "medium" | "hard" | "expert"
   timer?: number | null
   approach_score!: number
   identified_approach!: string
