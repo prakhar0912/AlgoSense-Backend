@@ -22,11 +22,14 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^26.1.0",
     "@types/pg": "^8.20.0",
+    "cheerio": "^1.2.0",
+    "html-to-text": "^10.0.0",
     "jest": "^30.4.2",
     "nodemon": "^3.1.14",
     "ts-jest": "^29.4.11",
     "ts-node": "^10.9.2",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "unirest": "^0.6.0"
   },
   "dependencies": {
     "argon2": "^0.44.0",

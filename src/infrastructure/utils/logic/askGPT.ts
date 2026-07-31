@@ -86,7 +86,7 @@ ${problem.evaluation_criteria.map(c => `  - ${c}`).join('\n')}`
 export default async (problem: Problem, userInput: string): Promise<ModelResponse> => {
 
   let { systemPrompt, approachesStrings, edgeCases } = systemPromptCreator(problem)
-  let models = ['nvidia/nemotron-3-ultra-550b-a55b:free', 'tencent/hy3:free', 'poolside/laguna-m.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free']
+  let models = ['nvidia/nemotron-3-super-120b-a12b:free', 'tencent/hy3:free', 'poolside/laguna-xs-2.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free']
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -119,7 +119,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
               },
               user_explanation_rating: {
                 type: 'string',
-                description: "Classify the overall correctness of the user's proposed algorithmic approach. 'optimal' means the user identified the expected optimal approach for the problem. 'correct' means the approach would solve the problem correctly but is not the optimal solution. 'partially_correct' means the user demonstrates some understanding but the approach contains significant omissions or flaws that would prevent it from working in all cases. 'incorrect' means the proposed approach would not correctly solve the problem.",
+                description: "Classify the overall correctness of the user's approach. 'optimal' means the user identified the expected optimal approach for the problem. 'correct' means the approach would solve the problem correctly but is not the optimal solution. 'partially_correct' means the user demonstrates some understanding but the approach contains significant omissions or flaws that would prevent it from working in all cases. 'incorrect' means the proposed approach would not correctly solve the problem.",
                 enum: ["optimal", "correct", "partially_correct", "incorrect"]
               },
               user_explanation_pass: {

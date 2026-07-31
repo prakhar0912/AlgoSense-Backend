@@ -84,7 +84,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
       throw new InternalServerError('The model responded incorrectly', errors)
     }
     if (!data['user_explanation_identified_apporach'] || !data['user_explanation_rating'] || !data['user_explanation_pass'] || !data['missing_points_in_user_explanation'] || !data['edge_cases_missed_in_user_explanation']) {
-      throw new InternalServerError('The model responded incorrectly', errors)
+      throw new InternalServerError('The model responded incorrectly.', errors)
     }
 
     let validatedData: ModelResponse = data
