@@ -89,7 +89,7 @@ for (let d of data) {
 
 }
 
-// console.log(stats)
+console.log(stats)
 // saveFile([...stats.easyQs, ...stats.mediumQs, ...stats.hardQs], '100sData.json')
 
 async function saveFile(content, fileName) {

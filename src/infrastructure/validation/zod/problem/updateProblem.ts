@@ -5,9 +5,11 @@ import z from 'zod'
 const updateProblemValidator =
   z.object({
     title: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
-    description: z.string().trim().min(10, 'description must be at least 10 characters long').max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
-    testCases: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
+    description: z.string().trim().min(10, 'description must be at least 10 characters long').max(1000, "Must be less than 1000 characters"),
     difficulty: z.enum(["easy", "medium", "hard", "expert"]),
+    rating: z.number().max(4000),
+    slug: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
+    hints: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
     approaches: z.array(z.object({
       type: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
       primary_technique: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),

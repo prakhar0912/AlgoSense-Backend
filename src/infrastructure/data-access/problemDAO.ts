@@ -7,12 +7,19 @@ import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
 
 type DbClient = Pick<PoolClient, "query">;
 
+type ProblemApproach = Problem["approaches"][number];
+type ProblemApproachEdgeCases = NonNullable<ProblemApproach["edge_cases"]>;
+type ProblemApproachEdgeCase = ProblemApproachEdgeCases[number];
 
 type ProblemRow = QueryResultRow & {
   id: string;
   title: string;
   description: string;
-  testCases: unknown;
+  rating: number | string;
+  slug: string;
+  hints: unknown;
+  primary_topics: unknown;
+  secondary_topics: unknown;
   difficulty: number | string;
   approaches: unknown;
   evaluation_criteria: unknown;
@@ -20,19 +27,42 @@ type ProblemRow = QueryResultRow & {
 
 type FilterableProblemColumn = keyof Pick<
   Problem,
-  "id" | "title" | "description" | "testCases" | "difficulty" | "approaches" | "evaluation_criteria"
+  | "id"
+  | "title"
+  | "description"
+  | "rating"
+  | "slug"
+  | "hints"
+  | "primary_topics"
+  | "secondary_topics"
+  | "difficulty"
+  | "approaches"
+  | "evaluation_criteria"
 >;
 
 type UpdatableProblemColumn = keyof Pick<
   Problem,
-  "title" | "description" | "testCases" | "difficulty" | "approaches" | "evaluation_criteria"
+  | "title"
+  | "description"
+  | "rating"
+  | "slug"
+  | "hints"
+  | "primary_topics"
+  | "secondary_topics"
+  | "difficulty"
+  | "approaches"
+  | "evaluation_criteria"
 >;
 
 const PROBLEM_COLUMNS = [
   "id",
   "title",
   "description",
-  "\"testCases\"",
+  "rating",
+  "slug",
+  "hints",
+  "primary_topics",
+  "secondary_topics",
   "difficulty",
   "approaches",
   "evaluation_criteria",
@@ -42,7 +72,11 @@ const FILTERABLE_COLUMNS: ReadonlyMap<FilterableProblemColumn, string> = new Map
   ["id", "id"],
   ["title", "title"],
   ["description", "description"],
-  ["testCases", "\"testCases\""],
+  ["rating", "rating"],
+  ["slug", "slug"],
+  ["hints", "hints"],
+  ["primary_topics", "primary_topics"],
+  ["secondary_topics", "secondary_topics"],
   ["difficulty", "difficulty"],
   ["approaches", "approaches"],
   ["evaluation_criteria", "evaluation_criteria"],
@@ -51,7 +85,11 @@ const FILTERABLE_COLUMNS: ReadonlyMap<FilterableProblemColumn, string> = new Map
 const UPDATABLE_COLUMNS: ReadonlyMap<UpdatableProblemColumn, string> = new Map([
   ["title", "title"],
   ["description", "description"],
-  ["testCases", "\"testCases\""],
+  ["rating", "rating"],
+  ["slug", "slug"],
+  ["hints", "hints"],
+  ["primary_topics", "primary_topics"],
+  ["secondary_topics", "secondary_topics"],
   ["difficulty", "difficulty"],
   ["approaches", "approaches"],
   ["evaluation_criteria", "evaluation_criteria"],
@@ -65,6 +103,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function toFiniteNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return 0;
+}
+
 function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -73,22 +126,101 @@ function toStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function toApproachArray(value: Problem['approaches']): Problem['approaches'] {
+function toDifficulty(value: unknown): Problem["difficulty"] {
+  const normalized = typeof value === "string" ? value.trim() : String(value);
+
+  if (normalized === "easy" || normalized === "1" || normalized === "1.0") {
+    return "easy";
+  }
+
+  if (normalized === "medium" || normalized === "2.5") {
+    return "medium";
+  }
+
+  if (normalized === "hard" || normalized === "6") {
+    return "hard";
+  }
+
+  if (normalized === "expert" || normalized === "7") {
+    return "expert";
+  }
+
+  return "easy";
+}
+
+function parseJsonRecord(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return isRecord(parsed) ? parsed : null;
+  }
+  catch {
+    return null;
+  }
+}
+
+function toEdgeCaseImportance(value: unknown): ProblemApproachEdgeCase["importance"] {
+  if (value === "critical" || value === "high" || value === "medium" || value === "low") {
+    return value;
+  }
+
+  return "low";
+}
+
+function normalizeApproachEdgeCases(value: unknown): ProblemApproachEdgeCases {
   if (!Array.isArray(value)) {
     return [];
   }
 
-  return value.filter(isRecord);
+  return value
+    .map((item) => {
+      const raw = isRecord(item) ? item : parseJsonRecord(item);
+      if (!raw) {
+        return null;
+      }
+
+      const description = typeof raw.case === "string"
+        ? raw.case
+        : typeof raw.description === "string"
+          ? raw.description
+          : "";
+
+      return {
+        case: description,
+        importance: toEdgeCaseImportance(raw.importance),
+      };
+    })
+    .filter((item): item is ProblemApproachEdgeCase => item !== null);
 }
 
-function toDifficulty(value: unknown): Problem["difficulty"] {
-  const parsed = typeof value === "string" ? value : String(value);
+function normalizeApproach(value: unknown): ProblemApproach | null {
+  const rawValue = isRecord(value) ? value : parseJsonRecord(value);
 
-  if (parsed === "easy" || parsed === "medium" || parsed === "hard" || parsed === "expert") {
-    return parsed;
+  if (!rawValue) {
+    return null;
   }
 
-  return "easy";
+  return {
+    type: typeof rawValue.type === "string" ? rawValue.type : "",
+    primary_technique: typeof rawValue.primary_technique === "string" ? rawValue.primary_technique : undefined,
+    time_complexity: typeof rawValue.time_complexity === "string" ? rawValue.time_complexity : "",
+    space_complexity: typeof rawValue.space_complexity === "string" ? rawValue.space_complexity : "",
+    req_or_constraints: typeof rawValue.req_or_constraints === "string" ? rawValue.req_or_constraints : "",
+    steps: toStringArray(rawValue.steps),
+    explanation: typeof rawValue.explanation === "string" ? rawValue.explanation : "",
+    edge_cases: normalizeApproachEdgeCases(rawValue.edge_cases),
+  };
+}
+
+function toApproachArray(value: unknown): Problem["approaches"] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((item) => normalizeApproach(item)).filter((item): item is ProblemApproach => item !== null);
 }
 
 function normalizeProblemRow(row: ProblemRow): Problem {
@@ -97,44 +229,77 @@ function normalizeProblemRow(row: ProblemRow): Problem {
   problem.id = row.id;
   problem.title = row.title;
   problem.description = row.description;
-  problem.testCases = toStringArray(row.testCases);
+  problem.rating = toFiniteNumber(row.rating);
+  problem.slug = row.slug;
+  problem.hints = toStringArray(row.hints);
+  problem.primary_topics = toStringArray(row.primary_topics);
+  problem.secondary_topics = toStringArray(row.secondary_topics);
   problem.difficulty = toDifficulty(row.difficulty);
-  problem.approaches = toApproachArray(row.approaches as Problem['approaches'])
+  problem.approaches = toApproachArray(row.approaches);
   problem.evaluation_criteria = toStringArray(row.evaluation_criteria);
 
   return problem;
 }
 
-function normalizeWriteValue(column: keyof Problem, value: unknown): unknown {
-  if (column === "difficulty") {
-    return String(value);
+function toDifficultyValue(value: unknown): Problem["difficulty"] {
+  return toDifficulty(value);
+}
+
+function buildProblemValueClause(column: keyof Problem, placeholder: string): string {
+  if (column === "rating") {
+    return `${placeholder}::double precision`;
   }
 
-  return value;
+  if (column === "difficulty") {
+    return `${placeholder}::difficulty_enum`;
+  }
+
+  if (column === "approaches") {
+    return `${placeholder}::jsonb[]`;
+  }
+
+  if (
+    column === "hints"
+    || column === "primary_topics"
+    || column === "secondary_topics"
+    || column === "evaluation_criteria"
+  ) {
+    return `${placeholder}::varchar[]`;
+  }
+
+  return placeholder;
 }
 
 export default class ProblemDAO implements IProblemDAO {
-  constructor(private readonly db: DbClient = client) { }
+  constructor(private readonly db: DbClient = client) {}
 
   async create(problemData: Partial<Problem>): Promise<Problem> {
     const query = `
       INSERT INTO problems (
         title,
         description,
-        "testCases",
+        rating,
+        slug,
+        hints,
+        primary_topics,
+        secondary_topics,
         difficulty,
         approaches,
         evaluation_criteria
       )
-      VALUES ($1, $2, $3::varchar[], $4::difficulty_enum, $5::jsonb[], $6::varchar[])
+      VALUES ($1, $2, $3::double precision, $4, $5::varchar[], $6::varchar[], $7::varchar[], $8::difficulty_enum, $9::jsonb[], $10::varchar[])
       RETURNING ${buildSelectColumns()}
     `;
 
     const params = [
       problemData.title,
       problemData.description,
-      problemData.testCases ?? [],
-      String(problemData.difficulty),
+      problemData.rating,
+      problemData.slug,
+      problemData.hints ?? [],
+      problemData.primary_topics ?? [],
+      problemData.secondary_topics ?? [],
+      toDifficultyValue(problemData.difficulty),
       problemData.approaches ?? [],
       problemData.evaluation_criteria ?? [],
     ];
@@ -163,20 +328,8 @@ export default class ProblemDAO implements IProblemDAO {
         continue;
       }
 
-      params.push(normalizeWriteValue(key, rawValue));
-
-      if (key === "testCases" || key === "evaluation_criteria") {
-        setClauses.push(`${column} = $${params.length}::varchar[]`);
-      }
-      else if (key === "approaches") {
-        setClauses.push(`${column} = $${params.length}::jsonb[]`);
-      }
-      else if (key === "difficulty") {
-        setClauses.push(`${column} = $${params.length}::difficulty_enum`);
-      }
-      else {
-        setClauses.push(`${column} = $${params.length}`);
-      }
+      params.push(key === "difficulty" ? toDifficultyValue(rawValue) : rawValue);
+      setClauses.push(`${column} = ${buildProblemValueClause(key, `$${params.length}`)}`);
     }
 
     if (setClauses.length === 0) {
@@ -274,9 +427,14 @@ export default class ProblemDAO implements IProblemDAO {
         continue;
       }
 
-      params.push(normalizeWriteValue(key, rawValue));
+      params.push(key === "difficulty" ? toDifficultyValue(rawValue) : rawValue);
 
-      if (key === "testCases" || key === "evaluation_criteria") {
+      if (
+        key === "hints"
+        || key === "primary_topics"
+        || key === "secondary_topics"
+        || key === "evaluation_criteria"
+      ) {
         clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}::varchar[]`);
       }
       else if (key === "approaches") {
@@ -284,6 +442,9 @@ export default class ProblemDAO implements IProblemDAO {
       }
       else if (key === "difficulty") {
         clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}::difficulty_enum`);
+      }
+      else if (key === "rating") {
+        clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}::double precision`);
       }
       else {
         clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}`);

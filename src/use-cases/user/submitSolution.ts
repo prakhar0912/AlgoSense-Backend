@@ -83,7 +83,12 @@ export default class SubmitSolution implements IUseCase<Submission> {
     if (errors && errors.length > 0 || !data) {
       throw new InternalServerError('The model responded incorrectly', errors)
     }
-    if (!data['user_explanation_identified_apporach'] || !data['user_explanation_rating'] || !data['user_explanation_pass'] || !data['missing_points_in_user_explanation'] || !data['edge_cases_missed_in_user_explanation']) {
+    if (!Object.hasOwn(data, 'user_explanation_identified_apporach') ||
+      !Object.hasOwn(data, 'user_explanation_rating') ||
+      !Object.hasOwn(data, 'user_explanation_pass') ||
+      !Object.hasOwn(data, 'missing_points_in_user_explanation') ||
+      !Object.hasOwn(data, 'edge_cases_missed_in_user_explanation')
+    ) {
       throw new InternalServerError('The model responded incorrectly.', errors)
     }
 
@@ -93,7 +98,11 @@ export default class SubmitSolution implements IUseCase<Submission> {
     let edgeCases: { approach: string, description: string, importance: "critical" | "high" | "medium" | "low" }[] = []
 
     problem.approaches.forEach((approach) => {
-      if (typeof approach.edge_cases !== "undefined" && approach.edge_cases.length >= 1) {
+      if (typeof approach.edge_cases !== "undefined" &&
+        approach.edge_cases.length >= 1 &&
+        ((Object.hasOwn(approach, 'primary_technique') && approach.primary_technique === validatedData.user_explanation_identified_apporach) ||
+          (approach.type === validatedData.user_explanation_identified_apporach))
+      ) {
         approach.edge_cases.forEach((c) => {
           edgeCases.push({
             approach: approach.primary_technique ? approach.primary_technique : approach.type,
@@ -105,18 +114,19 @@ export default class SubmitSolution implements IUseCase<Submission> {
     })
 
     let coveredEdgeCases: string[] = []
-    let finalEdgeCaseData: Submission['edge_cases'] = []
+    let finalEdgeCaseData: Submission['edge_cases'] | [] = []
     let earned = 0
     let max = 0
 
 
-    //TODO: Add checking of identified_approach with problem data approaches to identify which edge cases to check
+    //TODO: What to do when edgecases generated are of a different approach
     for (const detectedEdgeCase of validatedData.edge_cases_missed_in_user_explanation) {
       if (coveredEdgeCases.includes(detectedEdgeCase.missed_edge_case_description)) {
         continue
       }
       for (const edgeCase of edgeCases) {
-        if (detectedEdgeCase.missed_edge_case_description == edgeCase.description && !coveredEdgeCases.includes(detectedEdgeCase.missed_edge_case_description)) {
+        if (detectedEdgeCase.missed_edge_case_description == edgeCase.description
+          && !coveredEdgeCases.includes(detectedEdgeCase.missed_edge_case_description)) {
 
           let caseEarned = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[detectedEdgeCase.edge_case_coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
           let caseMax = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
@@ -137,17 +147,18 @@ export default class SubmitSolution implements IUseCase<Submission> {
     }
     let edgeCaseScore = 100
     console.log(earned, max)
-    if (max !== 0) {
+    if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
       edgeCaseScore = Math.ceil((earned / max) * 100)
     }
 
-    let submission: Submission
+    let submissionData: Submission
     try {
-      submission = await this.submissionDAO.create({
+      submissionData = await this.submissionDAO.create({
         user_id: userId,
         problem_id: problemId,
         user_input: userInput,
         difficulty: problem.difficulty,
+        problem_rating: problem.rating,
         approach_score: services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights],
         identified_approach: data.user_explanation_identified_apporach,
         pass: data.user_explanation_pass,
@@ -179,7 +190,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
     for (const submission of userSubmissionsData) {
       const weight = services.weights.problemDifficultyWeights[submission.difficulty as keyof typeof services.weights.problemDifficultyWeights];
 
-      weightedEdgeScore = submission.edge_case_score * weight
+      weightedEdgeScore += submission.edge_case_score * weight
       weightedScore += submission.approach_score * weight;
       totalWeight += weight;
     }
@@ -198,12 +209,78 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     console.log(mergedEdgeCaseScore, mergedApproachScore, totalScore)
 
+    const userPerformance: number = 0.55 * (submissionData.approach_score / 100) +
+      0.25 * (submissionData.edge_case_score / 100) +
+      0.20 * (services.weights.problemDifficultyWeights[submissionData.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
+
+
+    if (!userScores?.elo_rating) {
+      throw new InternalServerError("User's ELO rating is: null or undefined")
+    }
+
+    let effectiveUserRating: number = 0.5 * userScores?.elo_rating
+
+    let totalPrimaryTopicRating: number = 0
+    for (const topic of problem.primary_topics) {
+      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
+        totalPrimaryTopicRating +=
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
+      }
+    }
+    const weightedAveragePrimaryTopicRating: number =
+      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length) ||
+        totalPrimaryTopicRating === 0 ?
+        0.3 * userScores?.elo_rating : 0.3 * (totalPrimaryTopicRating / problem.primary_topics.length)
+
+    let totalSecondaryTopicRating: number = 0
+    for (const topic of problem.secondary_topics) {
+      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
+        totalSecondaryTopicRating +=
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
+      }
+    }
+    const weightedAverageSecondaryTopicRating: number =
+      Number.isNaN(totalSecondaryTopicRating / problem.secondary_topics.length) ||
+        totalSecondaryTopicRating === 0 ?
+        0.2 * userScores?.elo_rating : 0.2 * (totalSecondaryTopicRating / problem.secondary_topics.length)
+
+    effectiveUserRating += weightedAveragePrimaryTopicRating + weightedAverageSecondaryTopicRating
+
+    effectiveUserRating = Math.floor(effectiveUserRating)
+
+    const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
+
+    const ratingChange = services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
+
+    if (Number.isNaN(ratingChange)) {
+      throw new InternalServerError('Rating Change value is not a number')
+    }
+
+
+    let topicRatingsChange: Record<string, number> = {}
+    for (const topic of problem.primary_topics) {
+      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
+        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
+          userScores.elo_rating + ratingChange :
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + ratingChange
+      }
+    }
+    for (const topic of problem.secondary_topics) {
+      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
+        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
+          userScores.elo_rating + 0.5 * ratingChange :
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + 0.5 * ratingChange
+      }
+    }
+
     let updatedUserScores: UserScores
     try {
       updatedUserScores = await this.userDAO.setUserScores(userId, {
         approaches_score: mergedApproachScore,
         edge_case_score: mergedEdgeCaseScore,
-        total_score: totalScore
+        total_score: totalScore,
+        elo_rating: userScores.elo_rating + ratingChange,
+        topic_ratings: topicRatingsChange
       })
     }
     catch (e) {
@@ -221,15 +298,15 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     let newShortSubmission = new ShortSubmission()
 
-    newShortSubmission.submission_id = submission.id
-    newShortSubmission.problem_id = submission.problem_id
-    newShortSubmission.difficulty = submission.difficulty
-    newShortSubmission.timer = submission.timer ? submission.timer : null
-    newShortSubmission.approach_score = submission.approach_score
-    newShortSubmission.identified_approach = submission.identified_approach
-    newShortSubmission.pass = submission.pass
-    newShortSubmission.edge_case_score = submission.edge_case_score
-    newShortSubmission.submitted_at = submission.submitted_at
+    newShortSubmission.submission_id = submissionData.id
+    newShortSubmission.problem_id = submissionData.problem_id
+    newShortSubmission.difficulty = submissionData.difficulty
+    newShortSubmission.timer = submissionData.timer ? submissionData.timer : null
+    newShortSubmission.approach_score = submissionData.approach_score
+    newShortSubmission.identified_approach = submissionData.identified_approach
+    newShortSubmission.pass = submissionData.pass
+    newShortSubmission.edge_case_score = submissionData.edge_case_score
+    newShortSubmission.submitted_at = submissionData.submitted_at
 
     newestToOldest.unshift(newShortSubmission)
 
@@ -243,46 +320,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
 
 
-    return submission
-
+    return submissionData
   }
 }
-
-// let userInputa = `For Two Sum II, I would use the two-pointer approach because the array is already sorted.
-// I would initialize one pointer at the beginning of the array and another at the end.
-// Then, while the left pointer is less than the right pointer,
-// I would calculate the sum of the two elements at those pointers.
-// If the sum equals the target, I would return the indices.
-// If the sum is smaller than the target, I would move the left pointer forward to increase the sum, and if the sum is larger than the target, I would move the right pointer backward to decrease the sum.
-// Since the array is sorted, this allows us to eliminate unnecessary checks efficiently and solve the problem in O(n) time with O(1) extra space.
-// This approach also handles several important edge cases like,
-// pairs located at the extreme ends of the array. Additionally, in languages with fixed integer sizes, integer overflow should be considered when adding very large values. The two-pointer solution is optimal here because the sorted nature of the array enables efficient pointer movement without requiring additional data structures like a hash map.`
-//
-//
-// import UserDAO from "../../infrastructure/data-access/userDAO.js";
-// import ProblemDAO from "../../infrastructure/data-access/problemDAO.js";
-// import SubmissionDAO from "../../infrastructure/data-access/submissionDAO.js";
-// import askGPT from "../../infrastructure/utils/logic/askGPT.js";
-// import modelResponseValidator from "../../infrastructure/validation/zod/problem/modelResponseValidator.js";
-// import problemSolutionValidator from "../../infrastructure/validation/zod/problem/problemSolution.js";
-//
-//
-// import CreateProblem from "../admin/createProblem.js";
-// import problemValidator from "../../infrastructure/validation/zod/problem/validateProblem.js";
-//
-// let crea = new CreateProblem(
-//   new ProblemDAO(),
-//   problemValidator
-// )
-//
-//
-//
-// const a = new SubmitSolution(
-//   new UserDAO(),
-//   new ProblemDAO(),
-//   new SubmissionDAO(),
-//   askGPT,
-//   modelResponseValidator,
-//   problemSolutionValidator
-// )
-

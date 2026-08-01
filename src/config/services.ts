@@ -24,6 +24,7 @@ export default {
     getConsistencyScore
   },
   weights: {
+    elo_k_weight: 24,
     totalScoreWeights: {
       approach_score: 0.45,
       edge_case_score: 0.35,
@@ -49,10 +50,10 @@ export default {
       missing: 0
     },
     problemDifficultyWeights: {
-      easy: 1,
-      medium: 2,
-      hard: 4,
-      expert: 6,
+      easy: 20,
+      medium: 40,
+      hard: 75,
+      expert: 100,
     }
 
   }

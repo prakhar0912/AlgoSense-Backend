@@ -14,3 +14,14 @@ export default class User {
   email_verified!: boolean
   email_notifications_enabled!: boolean
 }
+// id uuid NOT NULL DEFAULT uuidv7(),
+// email character varying(100) COLLATE pg_catalog."default" NOT NULL,
+// first_name character varying(100) COLLATE pg_catalog."default" NOT NULL,
+// last_name character varying(100) COLLATE pg_catalog."default",
+// email_notifications_enabled boolean NOT NULL,
+// role roles NOT NULL,
+// banned boolean NOT NULL,
+// created_at character varying(30) COLLATE pg_catalog."default" NOT NULL,
+// email_verified boolean NOT NULL,
+// scores jsonb,
+// last_5_submissions jsonb[],
