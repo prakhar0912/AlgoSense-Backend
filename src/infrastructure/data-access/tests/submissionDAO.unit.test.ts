@@ -21,15 +21,18 @@ type SubmissionRow = QueryResultRow & {
   user_id: string;
   problem_id: string;
   difficulty: number | string;
+  problem_rating: number | string;
   user_input: string;
+  hints_used: unknown;
   timer: number | string | null;
   approach_score: number | string | null;
   identified_approach: string | null;
   pass: boolean;
   missing_points: unknown;
   edge_cases: unknown;
-  edge_case_score: number | string;
+  edge_case_score: number | string | null;
   submitted_at: string | Date | null;
+  elo_dif: number | string | null;
 };
 
 type SubmissionScoreRow = QueryResultRow & Pick<
@@ -43,15 +46,18 @@ function buildSubmissionRow(overrides: Partial<SubmissionRow> = {}): SubmissionR
     user_id: "user-123",
     problem_id: "problem-123",
     difficulty: "medium",
+    problem_rating: 4.5,
     user_input: "console.log('hello')",
+    hints_used: ["Try using a map"],
     timer: 12,
     approach_score: 9,
     identified_approach: "Dynamic programming",
     pass: true,
-    missing_points: ["point-1"],
+    missing_points: "point-1",
     edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
     edge_case_score: 8,
     submitted_at: "2026-01-01T00:00:00.000Z",
+    elo_dif: 17.5,
     ...overrides,
   };
 }
@@ -62,15 +68,18 @@ function buildSubmission(overrides: Partial<Submission> = {}): Submission {
     user_id: "user-123",
     problem_id: "problem-123",
     difficulty: "medium",
+    problem_rating: 4.5,
     user_input: "console.log('hello')",
+    hints_used: ["Try using a map"],
     timer: 12,
     approach_score: 9,
     identified_approach: "Dynamic programming",
     pass: true,
-    missing_points: ["point-1"],
+    missing_points: "point-1",
     edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
     edge_case_score: 8,
     submitted_at: "2026-01-01T00:00:00.000Z",
+    elo_dif: 17.5,
     ...overrides,
   });
 }
@@ -94,15 +103,18 @@ describe("SubmissionDAO unit", () => {
       user_id: "user-123",
       problem_id: "problem-123",
       difficulty: "medium",
+      problem_rating: 4.5,
       user_input: "console.log('hello')",
+      hints_used: ["Try using a map"],
       timer: 12,
       approach_score: 9,
       identified_approach: "Dynamic programming",
       pass: true,
-      missing_points: ["point-1"],
+      missing_points: "point-1",
       edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
       edge_case_score: 8,
       submitted_at: "2026-01-01T00:00:00.000Z",
+      elo_dif: 17.5,
     };
     const persistedRow = buildSubmissionRow();
 
@@ -121,13 +133,19 @@ describe("SubmissionDAO unit", () => {
 
     const [sql, params] = call;
     expect(sql).toContain("INSERT INTO submissions");
+    expect(sql).toContain("problem_rating");
+    expect(sql).toContain("hints_used");
+    expect(sql).toContain("missing_points");
+    expect(sql).toContain("elo_diff");
     expect(sql).toContain("difficulty_enum");
     expect(sql).toContain("RETURNING");
     expect(params).toEqual([
       payload.user_id,
       payload.problem_id,
-      String(payload.difficulty),
+      payload.difficulty,
+      payload.problem_rating,
       payload.user_input,
+      payload.hints_used,
       payload.timer,
       payload.approach_score,
       payload.identified_approach,
@@ -136,6 +154,7 @@ describe("SubmissionDAO unit", () => {
       payload.edge_cases,
       payload.edge_case_score,
       payload.submitted_at,
+      payload.elo_dif,
     ]);
     expect(result).toEqual(buildSubmission());
   });
@@ -147,7 +166,7 @@ describe("SubmissionDAO unit", () => {
         difficulty: "hard",
         approach_score: "95",
         edge_case_score: "83",
-        submitted_at: "2026-01-07T00:00:00.000Z",
+        submitted_at: new Date("2026-01-07T00:00:00.000Z"),
       },
       {
         problem_id: "problem-555",
@@ -232,15 +251,18 @@ describe("SubmissionDAO unit", () => {
     expect(sql).toContain("ORDER BY submitted_at DESC, id DESC");
     expect(params).toEqual(["user-123"]);
     expect(result).toEqual({
-      data: [buildSubmission({
-        id: "submission-2",
-        user_input: "console.log(2)",
-        submitted_at: "2026-01-03T00:00:00.000Z",
-      }), buildSubmission({
-        id: "submission-1",
-        user_input: "console.log(1)",
-        submitted_at: "2026-01-02T00:00:00.000Z",
-      })],
+      data: [
+        buildSubmission({
+          id: "submission-2",
+          user_input: "console.log(2)",
+          submitted_at: "2026-01-03T00:00:00.000Z",
+        }),
+        buildSubmission({
+          id: "submission-1",
+          user_input: "console.log(1)",
+          submitted_at: "2026-01-02T00:00:00.000Z",
+        }),
+      ],
       pagination: {
         page: 1,
         perPage: 2,
@@ -260,15 +282,18 @@ describe("SubmissionDAO unit", () => {
         user_id: "user-123",
         problem_id: "problem-123",
         difficulty: "medium",
+        problem_rating: 4.5,
         user_input: "console.log('hello')",
+        hints_used: ["Try using a map"],
         timer: 12,
         approach_score: 9,
         identified_approach: "Dynamic programming",
         pass: true,
-        missing_points: ["point-1"],
+        missing_points: "point-1",
         edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
         edge_case_score: 8,
         submitted_at: "2026-01-01T00:00:00.000Z",
+        elo_dif: 17.5,
       }),
     ).rejects.toThrow("Submission creation data didn't persist in the database");
   });

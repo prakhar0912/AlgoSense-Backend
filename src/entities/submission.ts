@@ -33,7 +33,6 @@ export default class Submission {
 //     hints_used character varying(1000)[] COLLATE pg_catalog."default",
 //     elo_diff double precision NOT NULL,
 //     missing_points character varying(4000) COLLATE pg_catalog."default",
-//
 
 
 

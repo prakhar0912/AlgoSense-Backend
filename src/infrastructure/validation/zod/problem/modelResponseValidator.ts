@@ -12,10 +12,13 @@ const modelResponseValidator = z.object({
   user_explanation_identified_apporach: z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
   user_explanation_pass: z.boolean(),
   missing_points_in_user_explanation: z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
-  edge_cases_missed_in_user_explanation: z.array(
+  edge_cases: z.array(
     z.object({
-      missed_edge_case_description: z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
-      edge_case_coverage: z.enum([
+      importance: z.enum([
+        "critical", "high", "medium", "low"
+      ]),
+      case: z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
+      coverage: z.enum([
         "correct",
         "partial",
         "incorrect",

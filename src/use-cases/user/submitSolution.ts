@@ -69,7 +69,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
     catch (e) {
       throw new InternalServerError('Error while fetching response from model', e)
     }
-    console.log(modelResp)
 
     let validatedModelResp: IValidatorResult<ModelResponse>
     try {
@@ -83,17 +82,10 @@ export default class SubmitSolution implements IUseCase<Submission> {
     if (errors && errors.length > 0 || !data) {
       throw new InternalServerError('The model responded incorrectly', errors)
     }
-    if (!Object.hasOwn(data, 'user_explanation_identified_apporach') ||
-      !Object.hasOwn(data, 'user_explanation_rating') ||
-      !Object.hasOwn(data, 'user_explanation_pass') ||
-      !Object.hasOwn(data, 'missing_points_in_user_explanation') ||
-      !Object.hasOwn(data, 'edge_cases_missed_in_user_explanation')
-    ) {
-      throw new InternalServerError('The model responded incorrectly.', errors)
-    }
 
     let validatedData: ModelResponse = data
 
+    console.log("Validated Model Response", validatedData)
 
     let edgeCases: { approach: string, description: string, importance: "critical" | "high" | "medium" | "low" }[] = []
 
@@ -105,7 +97,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
       ) {
         approach.edge_cases.forEach((c) => {
           edgeCases.push({
-            approach: approach.primary_technique ? approach.primary_technique : approach.type,
+            approach: approach?.primary_technique ? approach.primary_technique : approach.type,
             description: c.case,
             importance: c.importance,
           })
@@ -113,43 +105,42 @@ export default class SubmitSolution implements IUseCase<Submission> {
       }
     })
 
+    console.log("Edge cases of the identified approach: ", edgeCases)
     let coveredEdgeCases: string[] = []
-    let finalEdgeCaseData: Submission['edge_cases'] | [] = []
+    let finalEdgeCaseData: Submission['edge_cases'] = []
     let earned = 0
     let max = 0
 
-
     //TODO: What to do when edgecases generated are of a different approach
-    for (const detectedEdgeCase of validatedData.edge_cases_missed_in_user_explanation) {
-      if (coveredEdgeCases.includes(detectedEdgeCase.missed_edge_case_description)) {
-        continue
-      }
-      for (const edgeCase of edgeCases) {
-        if (detectedEdgeCase.missed_edge_case_description == edgeCase.description
-          && !coveredEdgeCases.includes(detectedEdgeCase.missed_edge_case_description)) {
-
-          let caseEarned = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[detectedEdgeCase.edge_case_coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
-          let caseMax = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
-          //FIX: Why do I have to use never here
-          let edgeCaseData = {
-            coverage: detectedEdgeCase.edge_case_coverage,
-            importance: edgeCase.importance,
-            description: edgeCase.description
-          }
-          finalEdgeCaseData.push(edgeCaseData as never)
-
-          earned += caseEarned
-          max += caseMax
+    for (const edgeCase of edgeCases) {
+      let caseMax = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
+      let matchedEdgeCase = validatedData.edge_cases.filter((obj) => obj.case === edgeCase.description)
+      if (matchedEdgeCase.length >= 1 && matchedEdgeCase[0]) {
+        let caseEarned = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[matchedEdgeCase[0].coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
+        earned += caseEarned
+        let edgeCaseData = {
+          coverage: matchedEdgeCase[0].coverage,
+          importance: edgeCase.importance,
+          description: edgeCase.description
         }
+        //FIX: Why do I have to use never here
+        finalEdgeCaseData.push(edgeCaseData as never)
       }
-      coveredEdgeCases.push(detectedEdgeCase.missed_edge_case_description)
+      else {
+        earned += caseMax
+      }
 
+      max += caseMax
     }
-    let edgeCaseScore = 100
-    console.log(earned, max)
+
+    console.log("Final Edge case data: ", finalEdgeCaseData)
+
+    let edgeCaseScore = 0
     if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
       edgeCaseScore = Math.ceil((earned / max) * 100)
     }
+
+    console.log("Final Edge Case Score: ", edgeCaseScore)
 
     let submissionData: Submission
     try {
@@ -181,7 +172,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
     catch (e) {
       throw new InternalServerError('Failed to fetch user submissions from the database', e)
     }
-    console.log(userSubmissionsData)
 
     let weightedScore = 0;
     let totalWeight = 0;
@@ -207,12 +197,12 @@ export default class SubmitSolution implements IUseCase<Submission> {
       totalScore += services.weights.totalScoreWeights.consistency_score * userScores?.consistency_score
     }
 
-    console.log(mergedEdgeCaseScore, mergedApproachScore, totalScore)
 
     const userPerformance: number = 0.55 * (submissionData.approach_score / 100) +
       0.25 * (submissionData.edge_case_score / 100) +
       0.20 * (services.weights.problemDifficultyWeights[submissionData.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
 
+    console.log("User Performance: ", userPerformance)
 
     if (!userScores?.elo_rating) {
       throw new InternalServerError("User's ELO rating is: null or undefined")
@@ -248,10 +238,15 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     effectiveUserRating = Math.floor(effectiveUserRating)
 
+
+    console.log("Effective User Rating: ", effectiveUserRating)
     const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
+
+    console.log("Expected user performance: ", expectedUserPerformance)
 
     const ratingChange = services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
 
+    console.log("Rating Change: ", ratingChange)
     if (Number.isNaN(ratingChange)) {
       throw new InternalServerError('Rating Change value is not a number')
     }
@@ -272,6 +267,14 @@ export default class SubmitSolution implements IUseCase<Submission> {
           userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + 0.5 * ratingChange
       }
     }
+
+    console.log('Final User Scores: ', {
+      approaches_score: mergedApproachScore,
+      edge_case_score: mergedEdgeCaseScore,
+      total_score: totalScore,
+      elo_rating: userScores.elo_rating + ratingChange,
+      topic_ratings: topicRatingsChange
+    })
 
     let updatedUserScores: UserScores
     try {

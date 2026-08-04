@@ -10,6 +10,8 @@ const updateProblemValidator =
     rating: z.number().max(4000),
     slug: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
     hints: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
+    primary_topics: z.array(z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val))),
+    secondary_topics: z.array(z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val))),
     approaches: z.array(z.object({
       type: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
       primary_technique: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),

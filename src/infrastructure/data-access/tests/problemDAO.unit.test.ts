@@ -22,7 +22,11 @@ type ProblemRow = QueryResultRow & {
   id: string;
   title: string;
   description: string;
-  testCases: unknown;
+  rating: number | string;
+  slug: string;
+  hints: unknown;
+  primary_topics: unknown;
+  secondary_topics: unknown;
   difficulty: number | string;
   approaches: unknown;
   evaluation_criteria: unknown;
@@ -39,7 +43,7 @@ function buildApproach(overrides: Partial<ProblemApproach> = {}): ProblemApproac
     req_or_constraints: "Array input",
     steps: ["Initialize pointers", "Move pointers toward each other"],
     explanation: "A linear scan with two moving pointers.",
-    edge_cases: [{ case: "empty array", importance: 10 }],
+    edge_cases: [{ case: "empty array", importance: "critical" }],
     ...overrides,
   };
 }
@@ -49,8 +53,12 @@ function buildProblemRow(overrides: Partial<ProblemRow> = {}): ProblemRow {
     id: "problem-123",
     title: "Two Sum",
     description: "Find two numbers that add up to a target value.",
-    testCases: ["1 2 -> 3"],
-    difficulty: 2.5,
+    rating: 4.5,
+    slug: "two-sum",
+    hints: ["Try using a map"],
+    primary_topics: ["hashTable"],
+    secondary_topics: ["array"],
+    difficulty: "medium",
     approaches: [buildApproach()],
     evaluation_criteria: ["Correctness"],
     ...overrides,
@@ -62,8 +70,12 @@ function buildProblem(overrides: Partial<Problem> = {}): Problem {
     id: "problem-123",
     title: "Two Sum",
     description: "Find two numbers that add up to a target value.",
-    testCases: ["1 2 -> 3"],
-    difficulty: 2.5 as const,
+    rating: 4.5,
+    slug: "two-sum",
+    hints: ["Try using a map"],
+    primary_topics: ["hashTable"],
+    secondary_topics: ["array"],
+    difficulty: "medium" as const,
     approaches: [buildApproach()],
     evaluation_criteria: ["Correctness"],
     ...overrides,
@@ -87,8 +99,12 @@ describe("ProblemDAO unit", () => {
     const payload: ProblemInsertPayload = {
       title: "Two Sum",
       description: "Find two numbers that add up to a target value.",
-      testCases: ["1 2 -> 3"],
-      difficulty: 2.5,
+      rating: 4.5,
+      slug: "two-sum",
+      hints: ["Try using a map"],
+      primary_topics: ["hashTable"],
+      secondary_topics: ["array"],
+      difficulty: "medium",
       approaches: [buildApproach()],
       evaluation_criteria: ["Correctness"],
     };
@@ -109,14 +125,22 @@ describe("ProblemDAO unit", () => {
 
     const [sql, params] = call;
     expect(sql).toContain("INSERT INTO problems");
-    expect(sql).toContain('"testCases"');
+    expect(sql).toContain("rating");
+    expect(sql).toContain("slug");
+    expect(sql).toContain("primary_topics");
+    expect(sql).toContain("secondary_topics");
     expect(sql).toContain("difficulty_enum");
     expect(sql).toContain("jsonb[]");
+    expect(sql).toContain("varchar[]");
     expect(params).toEqual([
       payload.title,
       payload.description,
-      payload.testCases,
-      String(payload.difficulty),
+      payload.rating,
+      payload.slug,
+      payload.hints,
+      payload.primary_topics,
+      payload.secondary_topics,
+      payload.difficulty,
       payload.approaches,
       payload.evaluation_criteria,
     ]);
@@ -127,8 +151,12 @@ describe("ProblemDAO unit", () => {
     const payload: ProblemInsertPayload = {
       title: "Two Sum",
       description: "Find two numbers that add up to a target value.",
-      testCases: ["1 2 -> 3"],
-      difficulty: 2.5,
+      rating: 4.5,
+      slug: "two-sum",
+      hints: ["Try using a map"],
+      primary_topics: ["hashTable"],
+      secondary_topics: ["array"],
+      difficulty: "medium",
       approaches: [buildApproach()],
       evaluation_criteria: ["Correctness"],
     };
@@ -159,10 +187,12 @@ describe("ProblemDAO unit", () => {
     const firstRow = buildProblemRow({
       id: "problem-1",
       title: "Alpha",
+      slug: "alpha",
     });
     const secondRow = buildProblemRow({
       id: "problem-2",
       title: "Beta",
+      slug: "beta",
     });
 
     query.mockResolvedValueOnce({
@@ -170,7 +200,7 @@ describe("ProblemDAO unit", () => {
       rowCount: 2,
     } as never);
 
-    const result = await dao.list({ difficulty: 2.5, title: "Alpha" }, 3, 25);
+    const result = await dao.list({ difficulty: "medium", slug: "alpha" }, 3, 25);
 
     expect(query).toHaveBeenCalledTimes(1);
     const call = query.mock.calls[0];
@@ -181,16 +211,21 @@ describe("ProblemDAO unit", () => {
     const [sql, params] = call;
     expect(sql).toContain("FROM problems");
     expect(sql).toContain("difficulty IS NOT DISTINCT FROM $1::difficulty_enum");
-    expect(sql).toContain("title IS NOT DISTINCT FROM $2");
-    expect(params).toEqual(["2.5", "Alpha", 25, 50]);
+    expect(sql).toContain("slug IS NOT DISTINCT FROM $2");
+    expect(params).toEqual(["medium", "alpha", 25, 50]);
     expect(result).toEqual({
-      data: [buildProblem({
-        id: "problem-2",
-        title: "Beta",
-      }), buildProblem({
-        id: "problem-1",
-        title: "Alpha",
-      })],
+      data: [
+        buildProblem({
+          id: "problem-2",
+          title: "Beta",
+          slug: "beta",
+        }),
+        buildProblem({
+          id: "problem-1",
+          title: "Alpha",
+          slug: "alpha",
+        }),
+      ],
       pagination: {
         page: 3,
         perPage: 25,
@@ -203,8 +238,12 @@ describe("ProblemDAO unit", () => {
       id: "spoofed-problem-id",
       title: "Two Sum Updated",
       description: "Updated description with enough detail.",
-      testCases: ["4 5 -> 9"],
-      difficulty: 6,
+      rating: 7.25,
+      slug: "two-sum-updated",
+      hints: ["Remember complements"],
+      primary_topics: ["hashTable"],
+      secondary_topics: ["array"],
+      difficulty: "hard",
       approaches: [
         buildApproach({
           type: "hash map",
@@ -214,7 +253,7 @@ describe("ProblemDAO unit", () => {
           req_or_constraints: "Array input",
           steps: ["Build map", "Scan array"],
           explanation: "Store values and check complements.",
-          edge_cases: [{ case: "duplicates", importance: 9 }],
+          edge_cases: [{ case: "duplicates", importance: "high" }],
         }),
       ],
       evaluation_criteria: ["Correctness", "Efficiency"],
@@ -223,8 +262,12 @@ describe("ProblemDAO unit", () => {
       id: "problem-123",
       title: "Two Sum Updated",
       description: "Updated description with enough detail.",
-      testCases: ["4 5 -> 9"],
-      difficulty: 6,
+      rating: 7.25,
+      slug: "two-sum-updated",
+      hints: ["Remember complements"],
+      primary_topics: ["hashTable"],
+      secondary_topics: ["array"],
+      difficulty: "hard",
       approaches: payload.approaches,
       evaluation_criteria: ["Correctness", "Efficiency"],
     });
@@ -244,11 +287,21 @@ describe("ProblemDAO unit", () => {
 
     const [sql, params] = call;
     expect(sql).toContain("UPDATE problems");
+    expect(sql).toContain("rating = $3::double precision");
+    expect(sql).toContain("slug = $4");
+    expect(sql).toContain("hints = $5::varchar[]");
+    expect(sql).toContain("primary_topics = $6::varchar[]");
+    expect(sql).toContain("secondary_topics = $7::varchar[]");
+    expect(sql).toContain("difficulty = $8::difficulty_enum");
     expect(params).toEqual([
       payload.title,
       payload.description,
-      payload.testCases,
-      String(payload.difficulty),
+      payload.rating,
+      payload.slug,
+      payload.hints,
+      payload.primary_topics,
+      payload.secondary_topics,
+      payload.difficulty,
       payload.approaches,
       payload.evaluation_criteria,
       "problem-123",
@@ -257,8 +310,12 @@ describe("ProblemDAO unit", () => {
       id: "problem-123",
       title: "Two Sum Updated",
       description: "Updated description with enough detail.",
-      testCases: ["4 5 -> 9"],
-      difficulty: 6,
+      rating: 7.25,
+      slug: "two-sum-updated",
+      hints: ["Remember complements"],
+      primary_topics: ["hashTable"],
+      secondary_topics: ["array"],
+      difficulty: "hard",
       approaches: payload.approaches,
       evaluation_criteria: ["Correctness", "Efficiency"],
     }));

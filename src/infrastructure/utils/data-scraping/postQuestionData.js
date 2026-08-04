@@ -1,126 +1,144 @@
 import { convert } from "html-to-text"
 
+import contentData from './data/100sData.json' with { type: 'json' };
 import unirest from 'unirest';
 
 let problem =
 {
-  "title": "Ways to Split Array Into Three Subarrays",
-  "description": convert("<p>A split of an integer array is <strong>good</strong> if:</p>\n\n<ul>\n\t<li>The array is split into three <strong>non-empty</strong> contiguous subarrays - named <code>left</code>, <code>mid</code>, <code>right</code> respectively from left to right.</li>\n\t<li>The sum of the elements in <code>left</code> is less than or equal to the sum of the elements in <code>mid</code>, and the sum of the elements in <code>mid</code> is less than or equal to the sum of the elements in <code>right</code>.</li>\n</ul>\n\n<p>Given <code>nums</code>, an array of <strong>non-negative</strong> integers, return <em>the number of <strong>good</strong> ways to split</em> <code>nums</code>. As the number may be too large, return it <strong>modulo</strong> <code>10<sup>9 </sup>+ 7</code>.</p>\n\n<p>&nbsp;</p>\n<p><strong class=\"example\">Example 1:</strong></p>\n\n<pre>\n<strong>Input:</strong> nums = [1,1,1]\n<strong>Output:</strong> 1\n<strong>Explanation:</strong> The only good way to split nums is [1] [1] [1].</pre>\n\n<p><strong class=\"example\">Example 2:</strong></p>\n\n<pre>\n<strong>Input:</strong> nums = [1,2,2,2,5,0]\n<strong>Output:</strong> 3\n<strong>Explanation:</strong> There are three good ways of splitting nums:\n[1] [2] [2,2,5,0]\n[1] [2,2] [2,5,0]\n[1,2] [2,2] [5,0]\n</pre>\n\n<p><strong class=\"example\">Example 3:</strong></p>\n\n<pre>\n<strong>Input:</strong> nums = [3,2,1]\n<strong>Output:</strong> 0\n<strong>Explanation:</strong> There is no good way to split nums.</pre>\n\n<p>&nbsp;</p>\n<p><strong>Constraints:</strong></p>\n\n<ul>\n\t<li><code>3 &lt;= nums.length &lt;= 10<sup>5</sup></code></li>\n\t<li><code>0 &lt;= nums[i] &lt;= 10<sup>4</sup></code></li>\n</ul>\n", { wordwrap: 130 }),
-  "difficulty": "medium",
-  "testCases": [],
+  "problem_slug": "remove-letter-to-equalize-frequency",
+  "primary_topics": [
+    "hash-table"
+  ],
+  "secondary_topics": [
+    "string",
+    "counting"
+  ],
   "approaches": [
     {
       "type": "Expected Approach",
-      "primary_technique": "Binary search on the answer",
-      "time_complexity": "O(n log R)",
+      "primary_technique": "Frequency counting with case analysis",
+      "time_complexity": "O(n)",
       "space_complexity": "O(1)",
-      "req_or_constraints": "Feasibility changes monotonically as the candidate value increases or decreases.",
+      "req_or_constraints": "Assume lowercase English letters so a fixed-size frequency table is enough.",
       "steps": [
-        "Identify the feasibility threshold for Ways to Split Array Into Three Subarrays and preserve only the information needed to continue.",
-        "Initialize the smallest valid starting case before processing the full input.",
-        "Update the predicate checks as each new item changes the state.",
-        "Discard or compress states that no longer affect the answer.",
-        "Return the final answer from the last valid state that remains."
+        "Count how many times each of the 26 letters appears in the word.",
+        "Build the multiset of non-zero frequencies because only letters still present after deletion must match.",
+        "Check whether removing one occurrence from a letter with frequency 1 would leave all remaining non-zero frequencies equal.",
+        "Check whether reducing exactly one higher frequency by 1 would make it match the common frequency of the other letters.",
+        "Return true when one of those cases works; otherwise return false."
       ],
-      "explanation": "For Ways to Split Array Into Three Subarrays, the key is to keep only the feasibility threshold that actually matters. Once that compact state is tracked correctly, the transition becomes local and the final answer follows from the last feasible configuration.",
+      "explanation": "Only one deletion is allowed, so the final valid configuration must come from either deleting an entire singleton letter or decreasing one oversized frequency by exactly one. Counting frequencies first exposes both possibilities without trying every index explicitly.",
       "edge_cases": [
         {
-          "case": "The predicate must be monotonic.",
+          "case": "The word already has all equal frequencies but still requires deleting one character, which may break equality unless one letter disappears cleanly.",
           "importance": "critical"
         },
         {
-          "case": "The lower and upper bounds should bracket the valid answer.",
+          "case": "Only one distinct character is present, so deleting one occurrence still leaves all present letters with equal frequency.",
           "importance": "high"
         },
         {
-          "case": "A failed candidate should only rule out one side of the search space.",
-          "importance": "critical"
+          "case": "One letter has frequency exactly one while all other present letters share a larger equal frequency.",
+          "importance": "high"
         }
       ]
     },
     {
-      "type": "Direct Feasibility Scan",
-      "time_complexity": "O(n log R)",
+      "type": "Removal Simulation by Character",
+      "time_complexity": "O(n + A^2)",
       "space_complexity": "O(1)",
-      "req_or_constraints": "Use a more explicit supporting structure for Ways to Split Array Into Three Subarrays.",
+      "req_or_constraints": "Efficient when the alphabet size A is fixed and small.",
       "steps": [
-        "Build the supporting structure that makes Ways to Split Array Into Three Subarrays easier to evaluate.",
-        "Use that structure to test each candidate or transition once.",
-        "Keep the best feasible result instead of recomputing it repeatedly.",
-        "Return the best result after the scan finishes."
+        "Count frequencies for each character.",
+        "For every letter with non-zero frequency, temporarily decrease its count by one.",
+        "Check whether all remaining non-zero counts are identical, then restore the count.",
+        "Return true as soon as one simulated deletion succeeds."
       ],
-      "explanation": "This version keeps the auxiliary structure explicit so the logic for Ways to Split Array Into Three Subarrays is easy to trace. It is often simpler to debug, but it does more bookkeeping than the expected approach.",
+      "explanation": "Every valid answer corresponds to deleting one occurrence from some character class. Simulating one removal per distinct character covers all meaningful outcomes without iterating over every index in the string.",
       "pros": [
-        "Makes the supporting state easy to inspect for Ways to Split Array Into Three Subarrays.",
-        "Helpful when debugging individual transitions."
+        "Simple to reason about and implement.",
+        "Avoids complicated frequency-pattern branching."
       ],
       "cons": [
-        "Uses extra auxiliary structure.",
-        "Does more bookkeeping than the expected approach."
+        "Still performs repeated equality checks after each simulation.",
+        "Less elegant than direct case analysis."
       ],
       "edge_cases": [
         {
-          "case": "The supporting structure must stay synchronized with the current input state.",
-          "importance": "critical"
-        },
-        {
-          "case": "Repeated values or ties should be handled consistently.",
+          "case": "Deleting from a character that appears once removes that character from the remaining set entirely.",
           "importance": "high"
         },
         {
-          "case": "The helper structure should not change the problem's validity rule.",
-          "importance": "critical"
+          "case": "Multiple characters share the same count, so only one of them may be a valid deletion source.",
+          "importance": "medium"
+        },
+        {
+          "case": "No simulated deletion produces uniform non-zero frequencies.",
+          "importance": "high"
         }
       ]
     },
     {
-      "type": "Brute Force Boundary Search",
+      "type": "Brute Force by Index Removal",
       "time_complexity": "O(n^2)",
-      "space_complexity": "O(1)",
-      "req_or_constraints": "Check every feasible candidate for Ways to Split Array Into Three Subarrays directly.",
+      "space_complexity": "O(n)",
+      "req_or_constraints": "Acceptable only because the input length is at most 100.",
       "steps": [
-        "Enumerate every candidate state or answer that Ways to Split Array Into Three Subarrays allows.",
-        "Check the problem rule directly for each candidate.",
-        "Track the best feasible result seen during the enumeration.",
-        "Return the best result once all candidates have been checked."
+        "Try deleting each index in the word one at a time.",
+        "Build the resulting string after that deletion.",
+        "Recount the frequencies of the remaining characters.",
+        "Check whether every present character now has the same frequency."
       ],
-      "explanation": "This baseline follows the statement literally for Ways to Split Array Into Three Subarrays. It is easy to trust on small inputs, but it repeats work that the optimized approach avoids.",
+      "explanation": "Deleting each possible index directly mirrors the problem statement. If any resulting string has uniform frequencies among its present letters, the answer is true.",
       "pros": [
-        "Directly mirrors the problem definition.",
-        "Useful as a correctness reference on small inputs."
+        "Matches the problem statement exactly.",
+        "Very easy to verify for correctness."
       ],
       "cons": [
-        "Repeats work across many candidates.",
-        "Too slow for the full constraint range."
+        "Repeats counting work for every index.",
+        "Scales poorly compared with frequency-based methods."
       ],
       "edge_cases": [
         {
-          "case": "The brute-force version should still match the exact definition of Ways to Split Array Into Three Subarrays.",
-          "importance": "critical"
+          "case": "Different indices of the same letter can lead to the same frequency outcome.",
+          "importance": "medium"
         },
         {
-          "case": "All candidates or states must be explored without skipping valid ones.",
-          "importance": "high"
+          "case": "A short word may become a single-character string after deletion.",
+          "importance": "medium"
         },
         {
-          "case": "The baseline is only practical because the input size is bounded.",
-          "importance": "critical"
+          "case": "The only valid deletion may be near the end of the string, so early exit is not guaranteed.",
+          "importance": "low"
         }
       ]
     }
   ],
   "evaluation_criteria": [
-    "Correctness: Check that Ways to Split Array Into Three Subarrays satisfies the exact rule described by the problem.",
-    "Completeness: Check that all required states, counts, or candidates are considered.",
-    "Clarity: Check that the explanation makes the transition or counting rule easy to follow.",
-    "Alignment: Check that the answer matches the problem type instead of a nearby but different task.",
-    "Edge Cases: Check boundaries, duplicates, empty or minimal states, and tie cases.",
-    "Missed Points: Check whether the answer skips an important feasibility or counting condition.",
-    "Overall Understanding: Judge whether the solution strategy is clearly connected to the core invariant."
+    "Correctness: Check that the solution enforces exactly one deletion and compares only non-zero remaining frequencies.",
+    "Completeness: Check that it handles both deleting a singleton letter and reducing one oversized frequency by one.",
+    "Clarity: Check that the frequency logic and acceptance conditions are explained in plain language.",
+    "Alignment: Check that the approach stays tied to lowercase-letter counting rather than unrelated string transformations.",
+    "Edge Cases: Check words with one distinct letter, already-uniform counts, and one outlier frequency.",
+    "Missed Points: Check whether the answer forgets that removing a letter can eliminate that character entirely from the remaining set.",
+    "Overall Understanding: Judge whether the reasoning identifies the limited ways one deletion can make all present frequencies equal."
   ]
 }
 
-console.log(convert("<p>A split of an integer array is <strong>good</strong> if:</p>\n\n<ul>\n\t<li>The array is split into three <strong>non-empty</strong> contiguous subarrays - named <code>left</code>, <code>mid</code>, <code>right</code> respectively from left to right.</li>\n\t<li>The sum of the elements in <code>left</code> is less than or equal to the sum of the elements in <code>mid</code>, and the sum of the elements in <code>mid</code> is less than or equal to the sum of the elements in <code>right</code>.</li>\n</ul>\n\n<p>Given <code>nums</code>, an array of <strong>non-negative</strong> integers, return <em>the number of <strong>good</strong> ways to split</em> <code>nums</code>. As the number may be too large, return it <strong>modulo</strong> <code>10<sup>9 </sup>+ 7</code>.</p>\n\n<p>&nbsp;</p>\n<p><strong class=\"example\">Example 1:</strong></p>\n\n<pre>\n<strong>Input:</strong> nums = [1,1,1]\n<strong>Output:</strong> 1\n<strong>Explanation:</strong> The only good way to split nums is [1] [1] [1].</pre>\n\n<p><strong class=\"example\">Example 2:</strong></p>\n\n<pre>\n<strong>Input:</strong> nums = [1,2,2,2,5,0]\n<strong>Output:</strong> 3\n<strong>Explanation:</strong> There are three good ways of splitting nums:\n[1] [2] [2,2,5,0]\n[1] [2,2] [2,5,0]\n[1,2] [2,2] [5,0]\n</pre>\n\n<p><strong class=\"example\">Example 3:</strong></p>\n\n<pre>\n<strong>Input:</strong> nums = [3,2,1]\n<strong>Output:</strong> 0\n<strong>Explanation:</strong> There is no good way to split nums.</pre>\n\n<p>&nbsp;</p>\n<p><strong>Constraints:</strong></p>\n\n<ul>\n\t<li><code>3 &lt;= nums.length &lt;= 10<sup>5</sup></code></li>\n\t<li><code>0 &lt;= nums[i] &lt;= 10<sup>4</sup></code></li>\n</ul>\n").replace(/\s+/g, ' ').trim())
+for (const obj of contentData) {
+  if (obj.slug == problem.problem_slug) {
+    problem.title = obj.title
+    problem.rating = obj.rating
+    problem.description = convert(obj.content).replace(/\s+/g, ' ').trim()
+    problem.hints = obj.hints
+    problem.difficulty = obj.difficulty.toLowerCase()
+    problem.slug = problem.problem_slug
+    delete problem.problem_slug
+  }
+}
+
+console.log(problem)
+
 var req = unirest('POST', 'https://localhost:3000/admin/problem/create')
   .headers({
     'Content-Type': 'application/json',

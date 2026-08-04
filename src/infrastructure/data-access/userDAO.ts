@@ -1,5 +1,4 @@
-// TODO: Change created_at from a string to a proper ISODate format capable of validation
-//TODO: Let the user table hold only the latest 5 submission's small information
+//TODO: In all DAOs use the base entities as types to spot errors during entity definition changes easily
 import client from './client.js'
 import type { PoolClient, QueryResultRow } from 'pg'
 
@@ -80,6 +79,77 @@ const UPDATABLE_COLUMNS = new Set<keyof User>([
   'email_notifications_enabled',
 ])
 
+const TOPIC_RATING_DEFAULTS = {
+  array: 0,
+  math: 0,
+  depthFirstSearch: 0,
+  breadthFirstSearch: 0,
+  unionFind: 0,
+  geometry: 0,
+  dynamicProgramming: 0,
+  binaryIndexedTree: 0,
+  orderedSet: 0,
+  binarySearch: 0,
+  greedy: 0,
+  heapPriorityQueue: 0,
+  string: 0,
+  backtracking: 0,
+  numberTheory: 0,
+  bitManipulation: 0,
+  bitmask: 0,
+  graph: 0,
+  topologicalSort: 0,
+  enumeration: 0,
+  matrix: 0,
+  prefixSum: 0,
+  hashTable: 0,
+  tree: 0,
+  simulation: 0,
+  sorting: 0,
+  stack: 0,
+  queue: 0,
+  monotonicStack: 0,
+  monotonicQueue: 0,
+  segmentTree: 0,
+  counting: 0,
+  shortestPath: 0,
+  recursion: 0,
+  stringMatching: 0,
+  slidingWindow: 0,
+  memoization: 0,
+  gameTheory: 0,
+  divideAndConquer: 0,
+  combinatorics: 0,
+  trie: 0,
+  twoPointers: 0,
+  rollingHash: 0,
+  hashFunction: 0,
+  sweepLine: 0,
+  suffixArray: 0,
+  eulerianCircuit: 0,
+  linkedList: 0,
+  doublyLinkedList: 0,
+  minimumSpanningTree: 0,
+  stronglyConnectedComponent: 0,
+  binarySearchTree: 0,
+  binaryTree: 0,
+  design: 0,
+  probabilityAndStatistics: 0,
+  dataStream: 0,
+  brainteaser: 0,
+  mergeSort: 0,
+  sort: 0,
+  randomized: 0,
+  biconnectedComponent: 0,
+  interactive: 0,
+  quickselect: 0,
+  radixSort: 0,
+  iterator: 0,
+  countingSort: 0,
+} as const
+
+const TOPIC_RATING_KEYS = Object.keys(TOPIC_RATING_DEFAULTS) as Array<keyof typeof TOPIC_RATING_DEFAULTS>
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -123,6 +193,10 @@ function toFiniteNumber(value: unknown): number {
 }
 
 function toStringArray(value: unknown): string[] {
+  if (typeof value === 'string') {
+    return value.trim().length > 0 ? [value] : []
+  }
+
   if (!Array.isArray(value)) {
     return []
   }
@@ -148,7 +222,7 @@ function normalizeShortSubmission(value: unknown): ShortSubmission {
       ? raw.id
       : ''
   submission.problem_id = typeof raw.problem_id === 'string' ? raw.problem_id : ''
-  submission.difficulty = raw.difficulty as "easy" | "medium" | "hard" | "expert"
+  submission.difficulty = raw.difficulty as ShortSubmission['difficulty']
   submission.timer = raw.timer === null || raw.timer === undefined ? null : toFiniteNumber(raw.timer)
   submission.approach_score = toFiniteNumber(raw.approach_score)
   submission.identified_approach = typeof raw.identified_approach === 'string' ? raw.identified_approach : ''
@@ -157,23 +231,6 @@ function normalizeShortSubmission(value: unknown): ShortSubmission {
   submission.submitted_at = toIsoString(raw.submitted_at ?? new Date())
 
   return submission
-}
-
-function normalizeScores(value: unknown): UserScores | null {
-  if (value === null || value === undefined) {
-    return null
-  }
-
-  const raw = isRecord(value) ? value : {}
-  const scores = new UserScores()
-  scores.approaches_score = toFiniteNumber(raw.approaches_score)
-  scores.consistency_score = toFiniteNumber(raw.consistency_score)
-  scores.edge_case_score = toFiniteNumber(raw.edge_case_score)
-  scores.days_logged_in = toIsoStringArray(raw.days_logged_in)
-  scores.total_score = toFiniteNumber(raw.total_score)
-  // scores.total_score = scores.approaches_score + scores.consistency_score + scores.edge_case_score
-
-  return scores
 }
 
 function normalizeShortSubmissions(value: unknown): ShortSubmission[] | null {
@@ -214,6 +271,59 @@ function toShortSubmissionJsonArray(value: unknown): JsonLike | null {
   }
 
   return value.map((submission) => toShortSubmissionJson(submission))
+}
+
+function normalizeTopicRatings(value: unknown): UserScores['topic_ratings'] {
+  const raw = isRecord(value) ? value : {}
+  const topicRatings: Record<string, number> = {}
+
+  for (const key of TOPIC_RATING_KEYS) {
+    topicRatings[key] = toFiniteNumber(raw[key])
+  }
+
+  return topicRatings as UserScores['topic_ratings']
+}
+
+function normalizeScores(value: unknown): UserScores | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  const raw = isRecord(value) ? value : {}
+  const scores = new UserScores()
+
+  scores.initial_elo_rating = toFiniteNumber(raw.initial_elo_rating ?? 1500)
+  scores.elo_rating = toFiniteNumber(raw.elo_rating ?? 1500)
+  scores.topic_ratings = normalizeTopicRatings(raw.topic_ratings)
+  scores.approaches_score = toFiniteNumber(raw.approaches_score)
+  scores.consistency_score = toFiniteNumber(raw.consistency_score)
+  scores.edge_case_score = toFiniteNumber(raw.edge_case_score)
+  scores.days_logged_in = toIsoStringArray(raw.days_logged_in)
+  scores.total_score = raw.total_score === undefined || raw.total_score === null
+    ? scores.approaches_score + scores.consistency_score + scores.edge_case_score
+    : toFiniteNumber(raw.total_score)
+
+  return scores
+}
+
+function serializeScores(value: Partial<UserScores> | null | undefined): JsonLike | null {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  if (!isRecord(value)) {
+    return null
+  }
+
+  const payload: Record<string, unknown> = {}
+
+  for (const [key, rawValue] of Object.entries(value)) {
+    if (rawValue !== undefined) {
+      payload[key] = rawValue
+    }
+  }
+
+  return payload
 }
 
 function buildSelectColumns(): string {
@@ -263,13 +373,7 @@ export default class UserDAO implements IUserDAO {
       userData.last_name ?? null,
       userData.role,
       userData.banned,
-      userData.scores ? {
-        approaches_score: userData.scores.approaches_score,
-        consistency_score: userData.scores.consistency_score,
-        edge_case_score: userData.scores.edge_case_score,
-        days_logged_in: userData.scores.days_logged_in,
-        total_score: userData.scores.total_score,
-      } : null,
+      serializeScores(userData.scores),
       toIsoString(userData.created_at),
       toShortSubmissionJsonArray(userData.last_5_submissions),
       userData.email_verified,
@@ -280,9 +384,8 @@ export default class UserDAO implements IUserDAO {
     if (result.rows[0]) {
       return this.mapUserRow(result.rows[0])
     }
-    else {
-      throw new Error("User creation data didn't persist in the database")
-    }
+
+    throw new Error("User creation data didn't persist in the database")
   }
 
   async update(userId: string, payload: Partial<User>) {
@@ -299,11 +402,7 @@ export default class UserDAO implements IUserDAO {
       [userId],
     )
 
-    if (result.rowCount === 0) {
-      throw new Error("Couldn't persist the delete operation")
-    }
-
-    return true
+    return result.rowCount === 1
   }
 
   async findById(userId: string) {
@@ -368,13 +467,12 @@ export default class UserDAO implements IUserDAO {
   async setUserScores(userId: string, scores: Partial<UserScores>): Promise<UserScores> {
     const patch = extractJsonPatch(scores)
     if (!patch) {
-      let res = await this.getUserScores(userId)
+      const res = await this.getUserScores(userId)
       if (!res) {
-        throw new Error("Failed to persist the update data")
+        throw new Error('Failed to persist the update data')
       }
-      else {
-        return res
-      }
+
+      return res
     }
 
     const result = await this.db.query<ScoreRow>(
@@ -391,21 +489,20 @@ export default class UserDAO implements IUserDAO {
     )
 
     if (result.rows.length === 0) {
-      throw new Error("Failed to persist the update data")
+      throw new Error('Failed to persist the update data')
     }
 
     const row = result.rows[0]
     if (!row) {
-      throw new Error("Failed to persist the update data")
+      throw new Error('Failed to persist the update data')
     }
 
-    let res = normalizeScores(row.scores)
+    const res = normalizeScores(row.scores)
     if (!res) {
-      throw new Error("Failed to persist the update data")
+      throw new Error('Failed to persist the update data')
     }
-    else {
-      return res
-    }
+
+    return res
   }
 
   async getUserSubmissions(userId: string): Promise<ShortSubmission[] | null> {
@@ -461,17 +558,17 @@ export default class UserDAO implements IUserDAO {
     )
 
     if (result.rows.length === 0) {
-      throw new Error("Failed to persist the update data")
+      throw new Error('Failed to persist the update data')
     }
 
     const row = result.rows[0]
     if (!row) {
-      throw new Error("Failed to persist the update data")
+      throw new Error('Failed to persist the update data')
     }
 
     const submissions = normalizeShortSubmissions(row.last_5_submissions)
     if (!submissions) {
-      throw new Error("Failed to persist the update data")
+      throw new Error('Failed to persist the update data')
     }
 
     return submissions
@@ -493,12 +590,12 @@ export default class UserDAO implements IUserDAO {
     )
 
     if (result.rows.length === 0) {
-      throw new Error("Unable to persist the update data")
+      return false
     }
 
     const row = result.rows[0]
     if (!row) {
-      throw new Error("Unable to persist the update data")
+      return false
     }
 
     return row.email_notifications_enabled
@@ -535,9 +632,8 @@ export default class UserDAO implements IUserDAO {
     if (result.rows[0]) {
       return this.mapUserRow(result.rows[0])
     }
-    else {
-      throw new Error("Failed to persist update change")
-    }
+
+    throw new Error('Failed to persist update change')
   }
 
   private buildFilterClause(filters: Partial<User>): { whereClause: string; params: unknown[] } {
@@ -617,7 +713,8 @@ export default class UserDAO implements IUserDAO {
         case 'scores': {
           if (rawValue === null) {
             setClauses.push('scores = NULL')
-          } else {
+          }
+          else {
             params.push(extractJsonPatch(rawValue))
             setClauses.push(`scores = CASE WHEN scores IS NULL THEN $${params.length}::jsonb ELSE scores || $${params.length}::jsonb END`)
           }
@@ -626,7 +723,8 @@ export default class UserDAO implements IUserDAO {
         case 'last_5_submissions': {
           if (rawValue === null) {
             setClauses.push('last_5_submissions = NULL')
-          } else {
+          }
+          else {
             params.push(toShortSubmissionJsonArray(rawValue))
             setClauses.push(`last_5_submissions = $${params.length}::jsonb[]`)
           }
@@ -646,13 +744,12 @@ export default class UserDAO implements IUserDAO {
     }
 
     if (setClauses.length === 0) {
-      let res = await this.findById(userId)
+      const res = await this.findById(userId)
       if (!res) {
         throw new Error("Nothing to update, but couldn't find user profile")
       }
-      else {
-        return res
-      }
+
+      return res
     }
 
     params.push(userId)
@@ -670,9 +767,8 @@ export default class UserDAO implements IUserDAO {
     if (result.rows[0]) {
       return this.mapUserRow(result.rows[0])
     }
-    else {
-      throw new Error("Couldn't persist User data update in database")
-    }
+
+    throw new Error("Couldn't persist User data update in database")
   }
 
   private mapUserRow(row: UserRow): User {

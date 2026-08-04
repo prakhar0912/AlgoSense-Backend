@@ -77,21 +77,22 @@ function buildApproach(index: number, overrides: Partial<ProblemApproach> = {}):
     edge_cases: [
       {
         case: `edge-${index}-1`,
-        importance: 10,
+        importance: "high",
       },
     ],
     ...overrides,
   };
 }
 
-function buildProblemInput(label: string, difficulty: Problem["difficulty"] = 2.5): ProblemInsertPayload {
+function buildProblemInput(label: string, difficulty: Problem["difficulty"] = "medium"): ProblemInsertPayload {
   return {
     title: `${runId}-${label}`,
     description: `${runId} description for ${label} with enough detail to be valid.`,
-    testCases: [
-      `${label}-input-1 -> ${label}-output-1`,
-      `${label}-input-2 -> ${label}-output-2`,
-    ],
+    rating: label.length + 4.5,
+    slug: `${runId}-${label}-slug`,
+    hints: [`${label}-hint-1`, `${label}-hint-2`],
+    primary_topics: [label, "hashTable"],
+    secondary_topics: ["array", "sorting"],
     difficulty,
     approaches: [buildApproach(1, {
       type: `${runId}-${label}-approach`,
@@ -173,7 +174,11 @@ describe("ProblemDAO integration", () => {
     expect(alpha.title).toBe(alphaInput.title);
     expect(mu.title).toBe(muInput.title);
     expect(zeta.title).toBe(zetaInput.title);
-    expect(alpha.testCases).toEqual(alphaInput.testCases);
+    expect(alpha.rating).toBe(alphaInput.rating);
+    expect(alpha.slug).toBe(alphaInput.slug);
+    expect(alpha.hints).toEqual(alphaInput.hints);
+    expect(alpha.primary_topics).toEqual(alphaInput.primary_topics);
+    expect(alpha.secondary_topics).toEqual(alphaInput.secondary_topics);
     expect(alpha.approaches).toEqual(alphaInput.approaches);
     expect(alpha.evaluation_criteria).toEqual(alphaInput.evaluation_criteria);
 
@@ -183,7 +188,11 @@ describe("ProblemDAO integration", () => {
       id: alpha.id,
       title: alphaInput.title,
       description: alphaInput.description,
-      testCases: alphaInput.testCases,
+      rating: alphaInput.rating,
+      slug: alphaInput.slug,
+      hints: alphaInput.hints,
+      primary_topics: alphaInput.primary_topics,
+      secondary_topics: alphaInput.secondary_topics,
       difficulty: alphaInput.difficulty,
       evaluation_criteria: alphaInput.evaluation_criteria,
     });
@@ -193,13 +202,13 @@ describe("ProblemDAO integration", () => {
     expect(lookedUpByName).toBeInstanceOf(Problem);
     expect(lookedUpByName?.id).toBe(mu.id);
 
-    const pageOne = await measure(metrics.listMs, () => problemDAO.list({ difficulty: 2.5 }, 1, 2));
+    const pageOne = await measure(metrics.listMs, () => problemDAO.list({ difficulty: "medium" }, 1, 2));
     expect(pageOne.pagination).toEqual({ page: 1, perPage: 2 });
     expect(pageOne.data).toHaveLength(2);
     expect(pageOne.data[0]?.title).toBe(alphaInput.title);
     expect(pageOne.data[1]?.title).toBe(muInput.title);
 
-    const pageTwo = await measure(metrics.listMs, () => problemDAO.list({ difficulty: 2.5 }, 2, 2));
+    const pageTwo = await measure(metrics.listMs, () => problemDAO.list({ difficulty: "medium" }, 2, 2));
     expect(pageTwo.pagination).toEqual({ page: 2, perPage: 2 });
     expect(pageTwo.data).toHaveLength(1);
     expect(pageTwo.data[0]?.title).toBe(zetaInput.title);
@@ -210,11 +219,12 @@ describe("ProblemDAO integration", () => {
       id: "spoofed-id",
       title: updatedTitle,
       description: updatedDescription,
-      testCases: [
-        "updated-input-1 -> updated-output-1",
-        "updated-input-2 -> updated-output-2",
-      ],
-      difficulty: 6,
+      rating: 9.25,
+      slug: `${runId}-mu-updated-slug`,
+      hints: ["updated-hint-1", "updated-hint-2"],
+      primary_topics: ["graph", "hashTable"],
+      secondary_topics: ["dynamicProgramming"],
+      difficulty: "hard",
       approaches: [
         buildApproach(2, {
           type: `${runId}-mu-updated-approach`,
@@ -227,7 +237,7 @@ describe("ProblemDAO integration", () => {
           edge_cases: [
             {
               case: "duplicates",
-              importance: 9,
+              importance: "critical",
             },
           ],
         }),
@@ -243,7 +253,12 @@ describe("ProblemDAO integration", () => {
     expect(updatedMu.id).toBe(mu.id);
     expect(updatedMu.title).toBe(updatedTitle);
     expect(updatedMu.description).toBe(updatedDescription);
-    expect(updatedMu.difficulty).toBe(6);
+    expect(updatedMu.rating).toBe(9.25);
+    expect(updatedMu.slug).toBe(`${runId}-mu-updated-slug`);
+    expect(updatedMu.hints).toEqual(["updated-hint-1", "updated-hint-2"]);
+    expect(updatedMu.primary_topics).toEqual(["graph", "hashTable"]);
+    expect(updatedMu.secondary_topics).toEqual(["dynamicProgramming"]);
+    expect(updatedMu.difficulty).toBe("hard");
     expect(updatedMu.approaches).toEqual(updatedInput.approaches);
 
     await expect(measure(metrics.findByNameMs, () => problemDAO.findByName(muInput.title))).resolves.toBeNull();

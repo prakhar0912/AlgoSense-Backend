@@ -106,6 +106,25 @@ function buildExactScores(values: ScoreSeed): UserScores {
   return scores;
 }
 
+function expectDefaultTopicRatings(topicRatings: UserScores["topic_ratings"] | null | undefined): void {
+  if (!topicRatings) {
+    throw new Error("Expected topic ratings to be present");
+  }
+
+  const normalized = topicRatings as Record<string, number>;
+
+  expect(normalized).toMatchObject({
+    array: 0,
+    math: 0,
+    depthFirstSearch: 0,
+    dynamicProgramming: 0,
+    graph: 0,
+    twoPointers: 0,
+    countingSort: 0,
+  });
+  expect(Object.values(normalized).every((value) => value === 0)).toBe(true);
+}
+
 function buildUserFixture(index: number, overrides: Partial<User> = {}): User {
   const user = new User();
   Object.assign(user, {
@@ -131,7 +150,7 @@ function buildShortSubmissionFixture(index: number): ShortSubmission {
   Object.assign(submission, {
     submission_id: `${runId}-submission-${index}`,
     problem_id: `${runId}-problem-${index}`,
-    difficulty: 2.5,
+    difficulty: "medium",
     timer: index,
     approach_score: 10 + index,
     identified_approach: `${runId}-approach-${index}`,
@@ -380,44 +399,56 @@ describe("UserDAO integration", () => {
     const firstMergedScores = await measure(metrics.setUserScoresMs, () => userDAO.setUserScores(scoreUser.id, firstPatch));
     expect(firstMergedScores).toBeInstanceOf(UserScores);
     expect(firstMergedScores).toMatchObject({
+      initial_elo_rating: 1500,
+      elo_rating: 1500,
       approaches_score: 15,
       consistency_score: 25,
       edge_case_score: 35,
       total_score: 75,
       days_logged_in: [`${runId}-scores-day-1`],
     });
+    expectDefaultTopicRatings(firstMergedScores.topic_ratings);
 
     const afterFirstRead = await measure(metrics.getUserScoresMs, () => userDAO.getUserScores(scoreUser.id));
     expect(afterFirstRead).toBeInstanceOf(UserScores);
     expect(afterFirstRead).toMatchObject({
+      initial_elo_rating: 1500,
+      elo_rating: 1500,
       approaches_score: 15,
       consistency_score: 25,
       edge_case_score: 35,
       total_score: 75,
       days_logged_in: [`${runId}-scores-day-1`],
     });
+    expectDefaultTopicRatings(afterFirstRead?.topic_ratings);
 
     const secondMergedScores = await measure(metrics.setUserScoresMs, () => userDAO.setUserScores(scoreUser.id, {
       edge_case_score: 40,
     }));
     expect(secondMergedScores).toBeInstanceOf(UserScores);
     expect(secondMergedScores).toMatchObject({
+      initial_elo_rating: 1500,
+      elo_rating: 1500,
       approaches_score: 15,
       consistency_score: 25,
       edge_case_score: 40,
       total_score: 80,
       days_logged_in: [`${runId}-scores-day-1`],
     });
+    expectDefaultTopicRatings(secondMergedScores.topic_ratings);
 
     const afterSecondRead = await measure(metrics.getUserScoresMs, () => userDAO.getUserScores(scoreUser.id));
     expect(afterSecondRead).toBeInstanceOf(UserScores);
     expect(afterSecondRead).toMatchObject({
+      initial_elo_rating: 1500,
+      elo_rating: 1500,
       approaches_score: 15,
       consistency_score: 25,
       edge_case_score: 40,
       total_score: 80,
       days_logged_in: [`${runId}-scores-day-1`],
     });
+    expectDefaultTopicRatings(afterSecondRead?.topic_ratings);
   });
 
   it("round-trips last_5_submissions arrays and keeps the last five entries", async () => {
@@ -435,22 +466,26 @@ describe("UserDAO integration", () => {
     expect(updatedProfile).toHaveLength(6);
     expect(updatedProfile[0]).toBeInstanceOf(ShortSubmission);
     expect(updatedProfile[5]?.submission_id).toBe(submissions[5]?.submission_id);
+    expect(updatedProfile[0]?.difficulty).toBe("medium");
 
     const refetchedUser = await measure(metrics.findByIdMs, () => userDAO.findById(submissionUser.id));
     expect(refetchedUser?.last_5_submissions).toHaveLength(6);
     expect(refetchedUser?.last_5_submissions?.[0]).toBeInstanceOf(ShortSubmission);
     expect(refetchedUser?.last_5_submissions?.[5]?.submission_id).toBe(submissions[5]?.submission_id);
+    expect(refetchedUser?.last_5_submissions?.[0]?.difficulty).toBe("medium");
 
     const persistedSubmissions = await measure(metrics.getUserSubmissionsMs, () => userDAO.getUserSubmissions(submissionUser.id));
     expect(persistedSubmissions).toHaveLength(6);
     expect(persistedSubmissions?.[0]).toBeInstanceOf(ShortSubmission);
     expect(persistedSubmissions?.[0]?.submission_id).toBe(submissions[0]?.submission_id);
     expect(persistedSubmissions?.[5]?.submission_id).toBe(submissions[5]?.submission_id);
+    expect(persistedSubmissions?.[0]?.difficulty).toBe("medium");
 
     const lastFiveSubmissions = await measure(metrics.getLast5SubmissionsMs, () => userDAO.getLast5Submissions(submissionUser.id));
     expect(lastFiveSubmissions).toHaveLength(5);
     expect(lastFiveSubmissions?.[0]?.submission_id).toBe(submissions[1]?.submission_id);
     expect(lastFiveSubmissions?.[4]?.submission_id).toBe(submissions[5]?.submission_id);
+    expect(lastFiveSubmissions?.[0]?.difficulty).toBe("medium");
   });
 
   it("returns null for missing reads and rejects missing writes", async () => {
@@ -470,6 +505,7 @@ describe("UserDAO integration", () => {
     await expect(measure(metrics.getUserSubmissionsMs, () => userDAO.getUserSubmissions(missingUserId))).resolves.toBeNull();
     await expect(measure(metrics.getLast5SubmissionsMs, () => userDAO.getLast5Submissions(missingUserId))).resolves.toBeNull();
     await expect(measure(metrics.setSubmissionsInProfileMs, () => userDAO.setSubmissionsInProfile(missingUserId, []))).rejects.toThrow("Failed to persist the update data");
+    await expect(measure(metrics.toggleEmailNotificationsMs, () => userDAO.toggleEmailNotifications(missingUserId, false))).resolves.toBe(false);
 
     const emptyPage = await measure(metrics.findAllMs, () => userDAO.findAll({ scores: missingScores }, 1, 5));
     expect(emptyPage).toEqual({
@@ -491,11 +527,10 @@ describe("UserDAO integration", () => {
     }))).rejects.toThrow("Couldn't persist User data update in database");
     await expect(measure(metrics.toggleBanUserMs, () => userDAO.toggleBanUser(missingUserId, true))).rejects.toThrow("Failed to persist update change");
     await expect(measure(metrics.unbanUserMs, () => userDAO.unbanUser(missingUserId))).rejects.toThrow("Failed to persist update change");
-    await expect(measure(metrics.toggleEmailNotificationsMs, () => userDAO.toggleEmailNotifications(missingUserId, false))).rejects.toThrow("Unable to persist the update data");
     await expect(measure(metrics.setUserScoresMs, () => userDAO.setUserScores(missingUserId, {
       approaches_score: 1,
     }))).rejects.toThrow("Failed to persist the update data");
-    await expect(measure(metrics.deleteMs, () => userDAO.delete(missingUserId))).rejects.toThrow("Couldn't persist the delete operation");
+    await expect(measure(metrics.deleteMs, () => userDAO.delete(missingUserId))).resolves.toBe(false);
   });
 });
 

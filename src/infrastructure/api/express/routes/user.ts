@@ -69,7 +69,7 @@ router.post('/submitSolution', async (req: Request, res: Response, next: NextFun
       throw new UnauthorizedError('User ID is required')
     }
     const body = req.body
-    const success = await userController.submitAnswer({ body, userId: "0197f96c-b278-7f64-a32f-dae3cabe1ff0" })
+    const success = await userController.submitAnswer({ body, userId: "019fc06b-c22d-79a3-9402-fd982ae4bb26" })
     res.send({ success })
   } catch (err) {
     next(err)

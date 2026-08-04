@@ -13,6 +13,25 @@ import UserScores from '../../../entities/userScores.js'
 
 type MockDbClient = Pick<PoolClient, 'query'>
 
+function expectDefaultTopicRatings(topicRatings: UserScores['topic_ratings'] | undefined): void {
+  if (!topicRatings) {
+    throw new Error('Expected topic ratings to be present')
+  }
+
+  const normalized = topicRatings as Record<string, number>
+
+  expect(normalized).toMatchObject({
+    array: 0,
+    math: 0,
+    depthFirstSearch: 0,
+    dynamicProgramming: 0,
+    graph: 0,
+    twoPointers: 0,
+    countingSort: 0,
+  })
+  expect(Object.values(normalized).every((value) => value === 0)).toBe(true)
+}
+
 function createUserRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'user-123',
@@ -32,7 +51,7 @@ function createUserRow(overrides: Record<string, unknown> = {}) {
       {
         submission_id: 'submission-1',
         problem_id: 'problem-1',
-        difficulty: 2.5,
+        difficulty: 'medium',
         timer: null,
         approach_score: 8,
         identified_approach: 'Greedy',
@@ -51,7 +70,7 @@ function createShortSubmission(index: number) {
   return {
     submission_id: `submission-${index}`,
     problem_id: 'problem-1',
-    difficulty: 2.5,
+    difficulty: 'medium',
     timer: null,
     approach_score: index,
     identified_approach: `approach-${index}`,
@@ -103,14 +122,17 @@ describe('UserDAO', () => {
       approaches_score: 10,
       consistency_score: 20,
       edge_case_score: 30,
+      initial_elo_rating: 1500,
+      elo_rating: 1500,
       total_score: 60,
       days_logged_in: ['2026-01-01T00:00:00.000Z'],
     })
+    expectDefaultTopicRatings(result?.scores?.topic_ratings)
     expect(result?.last_5_submissions?.[0]).toBeInstanceOf(ShortSubmission)
     expect(result?.last_5_submissions?.[0]).toMatchObject({
       submission_id: 'submission-1',
       problem_id: 'problem-1',
-      difficulty: 2.5,
+      difficulty: 'medium',
       pass: true,
       edge_case_score: 7,
     })
@@ -158,21 +180,24 @@ describe('UserDAO', () => {
       ['user-123', { approaches_score: 50 }],
     )
     expect(result).toMatchObject({
+      initial_elo_rating: 1500,
+      elo_rating: 1500,
       approaches_score: 50,
       consistency_score: 20,
       edge_case_score: 10,
       total_score: 80,
       days_logged_in: ['2026-01-01T00:00:00.000Z'],
     })
+    expectDefaultTopicRatings(result.topic_ratings)
   })
 
-  it('returns true for a deleted row and null when nothing was deleted', async () => {
+  it('returns true for a deleted row and false when nothing was deleted', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ id: 'user-123' }], rowCount: 1 })
       .mockResolvedValueOnce({ rows: [], rowCount: 0 })
 
     await expect(dao.delete('user-123')).resolves.toBe(true)
-    await expect(dao.delete('missing-user')).rejects.toThrow(new Error("Couldn't persist the delete operation"))
+    await expect(dao.delete('missing-user')).resolves.toBe(false)
   })
 
   it('returns the last five submissions in order', async () => {
@@ -211,7 +236,7 @@ describe('UserDAO', () => {
     expect(result[0]).toMatchObject({
       submission_id: 'submission-1',
       problem_id: 'problem-1',
-      difficulty: 2.5,
+      difficulty: 'medium',
     })
   })
 
@@ -222,5 +247,14 @@ describe('UserDAO', () => {
     })
 
     await expect(dao.toggleEmailNotifications('user-123', false)).resolves.toBe(false)
+  })
+
+  it('returns false from toggleEmailNotifications when no row is updated', async () => {
+    query.mockResolvedValueOnce({
+      rows: [],
+      rowCount: 0,
+    })
+
+    await expect(dao.toggleEmailNotifications('missing-user', true)).resolves.toBe(false)
   })
 })

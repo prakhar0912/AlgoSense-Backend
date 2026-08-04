@@ -84,7 +84,11 @@ function buildProblemInput(index: number, difficulty: Problem["difficulty"]): Om
   return {
     title: `${runId}-problem-${index}`,
     description: `${runId} description for submission problem ${index}`,
-    testCases: [`input-${index} -> output-${index}`],
+    rating: 4.5 + index,
+    slug: `${runId}-problem-${index}-slug`,
+    hints: [`hint-${index}-1`, `hint-${index}-2`],
+    primary_topics: [`topic-${index}`, "hashTable"],
+    secondary_topics: ["array", "sorting"],
     difficulty,
     approaches: [{
       type: `${runId}-approach-${index}`,
@@ -97,6 +101,7 @@ function buildProblemInput(index: number, difficulty: Problem["difficulty"]): Om
       edge_cases: [{
         case: `edge-${index}`,
         importance: "high",
+        coverage: "partial",
       }],
     }],
     evaluation_criteria: [`criterion-${index}`],
@@ -133,8 +138,7 @@ async function seedProblem(index: number, difficulty: Problem["difficulty"]): Pr
 
 function buildSubmissionInput(
   userId: string,
-  problemId: string,
-  difficulty: Submission["difficulty"],
+  problem: Problem,
   submittedAt: string,
   overrides: Partial<Submission> = {},
 ): Partial<Submission> {
@@ -142,21 +146,24 @@ function buildSubmissionInput(
 
   return {
     user_id: userId,
-    problem_id: problemId,
-    user_input: `console.log("${problemId}")`,
-    difficulty,
+    problem_id: problem.id,
+    problem_rating: problem.rating,
+    user_input: `console.log("${problem.id}")`,
+    hints_used: [`${runId}-hint-${problem.id}`],
+    difficulty: problem.difficulty,
     timer: baseApproachScore,
     approach_score: baseApproachScore,
-    identified_approach: `${runId}-approach-${problemId}`,
+    identified_approach: `${runId}-approach-${problem.id}`,
     pass: true,
-    missing_points: [`missing-${problemId}`],
+    missing_points: `missing-${problem.id}`,
     edge_cases: [{
-      description: `edge-${problemId}`,
+      description: `edge-${problem.id}`,
       importance: "high",
       coverage: "partial",
     }],
     edge_case_score: 50,
     submitted_at: submittedAt,
+    elo_dif: 0,
     ...overrides,
   };
 }
@@ -215,8 +222,7 @@ describe("SubmissionDAO integration", () => {
     const createdSubmissions: Submission[] = [];
     createdSubmissions.push(await createSubmission(buildSubmissionInput(
       createdUser.id,
-      mediumProblem.id,
-      "medium",
+      mediumProblem,
       new Date(Date.UTC(2026, 0, 1, 0, 0, 1)).toISOString(),
       {
         approach_score: 70,
@@ -225,8 +231,7 @@ describe("SubmissionDAO integration", () => {
     )));
     createdSubmissions.push(await createSubmission(buildSubmissionInput(
       createdUser.id,
-      mediumProblem.id,
-      "medium",
+      mediumProblem,
       new Date(Date.UTC(2026, 0, 1, 0, 0, 2)).toISOString(),
       {
         approach_score: 80,
@@ -235,8 +240,7 @@ describe("SubmissionDAO integration", () => {
     )));
     createdSubmissions.push(await createSubmission(buildSubmissionInput(
       createdUser.id,
-      mediumProblem.id,
-      "medium",
+      mediumProblem,
       new Date(Date.UTC(2026, 0, 1, 0, 0, 3)).toISOString(),
       {
         approach_score: 80,
@@ -245,8 +249,7 @@ describe("SubmissionDAO integration", () => {
     )));
     createdSubmissions.push(await createSubmission(buildSubmissionInput(
       createdUser.id,
-      hardProblem.id,
-      "hard",
+      hardProblem,
       new Date(Date.UTC(2026, 0, 1, 0, 0, 4)).toISOString(),
       {
         approach_score: 60,
@@ -255,8 +258,7 @@ describe("SubmissionDAO integration", () => {
     )));
     createdSubmissions.push(await createSubmission(buildSubmissionInput(
       createdUser.id,
-      hardProblem.id,
-      "hard",
+      hardProblem,
       new Date(Date.UTC(2026, 0, 1, 0, 0, 5)).toISOString(),
       {
         approach_score: 65,
@@ -265,8 +267,7 @@ describe("SubmissionDAO integration", () => {
     )));
     createdSubmissions.push(await createSubmission(buildSubmissionInput(
       createdUser.id,
-      easyProblem.id,
-      "easy",
+      easyProblem,
       new Date(Date.UTC(2026, 0, 1, 0, 0, 6)).toISOString(),
       {
         approach_score: 50,
@@ -281,6 +282,10 @@ describe("SubmissionDAO integration", () => {
       expect(created.user_id).toBe(createdUser.id);
       expect(created.problem_id === easyProblem.id || created.problem_id === mediumProblem.id || created.problem_id === hardProblem.id).toBe(true);
       expect(created.difficulty === "easy" || created.difficulty === "medium" || created.difficulty === "hard").toBe(true);
+      expect(created.problem_rating).toBeGreaterThan(0);
+      expect(created.hints_used).toHaveLength(1);
+      expect(created.missing_points).toContain("missing-");
+      expect(created.elo_dif).toBe(0);
     }
 
     const bestMediumSubmission = createdSubmissions[2];
@@ -295,8 +300,12 @@ describe("SubmissionDAO integration", () => {
       user_id: createdUser.id,
       problem_id: mediumProblem.id,
       difficulty: "medium",
+      problem_rating: mediumProblem.rating,
+      hints_used: [`${runId}-hint-${mediumProblem.id}`],
       approach_score: 80,
       edge_case_score: 90,
+      missing_points: `missing-${mediumProblem.id}`,
+      elo_dif: 0,
     });
 
     const paginated = await measure(metrics.viewByUserMs, () => submissionDAO.viewByUser(createdUser.id));

@@ -9,6 +9,8 @@ const createProblemValidator = z.object({
   description: z.string().trim().min(10, 'description must be at least 10 characters long').max(4000, "Must be less than 1000 characters"),
   rating: z.number().max(4000),
   hints: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
+  primary_topics: z.array(z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val))).default([]),
+  secondary_topics: z.array(z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val))).default([]),
   difficulty: z.enum(["easy", "medium", "hard", "expert"]),
   approaches: z.array(z.object({
     type: z.string().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
