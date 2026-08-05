@@ -87,60 +87,26 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     console.log("Validated Model Response", validatedData)
 
-    let edgeCases: { approach: string, description: string, importance: "critical" | "high" | "medium" | "low" }[] = []
-
-    problem.approaches.forEach((approach) => {
-      if (typeof approach.edge_cases !== "undefined" &&
-        approach.edge_cases.length >= 1 &&
-        ((Object.hasOwn(approach, 'primary_technique') && approach.primary_technique === validatedData.user_explanation_identified_apporach) ||
-          (approach.type === validatedData.user_explanation_identified_apporach))
-      ) {
-        approach.edge_cases.forEach((c) => {
-          edgeCases.push({
-            approach: approach?.primary_technique ? approach.primary_technique : approach.type,
-            description: c.case,
-            importance: c.importance,
-          })
-        });
-      }
-    })
-
-    console.log("Edge cases of the identified approach: ", edgeCases)
-    let coveredEdgeCases: string[] = []
     let finalEdgeCaseData: Submission['edge_cases'] = []
     let earned = 0
     let max = 0
 
-    //TODO: What to do when edgecases generated are of a different approach
-    for (const edgeCase of edgeCases) {
-      let caseMax = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
-      let matchedEdgeCase = validatedData.edge_cases.filter((obj) => obj.case === edgeCase.description)
-      if (matchedEdgeCase.length >= 1 && matchedEdgeCase[0]) {
-        let caseEarned = services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[matchedEdgeCase[0].coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
-        earned += caseEarned
-        let edgeCaseData = {
-          coverage: matchedEdgeCase[0].coverage,
-          importance: edgeCase.importance,
-          description: edgeCase.description
-        }
-        //FIX: Why do I have to use never here
-        finalEdgeCaseData.push(edgeCaseData as never)
-      }
-      else {
-        earned += caseMax
-      }
+    for (const edgeCase of validatedData.edge_cases) {
+      max += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
+      earned += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[edgeCase.coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
 
-      max += caseMax
+      finalEdgeCaseData.push({
+        description: edgeCase.case,
+        coverage: edgeCase.coverage,
+        importance: edgeCase.importance,
+      } as never)
     }
 
-    console.log("Final Edge case data: ", finalEdgeCaseData)
-
-    let edgeCaseScore = 0
+    let edgeCaseScore = 100
     if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
       edgeCaseScore = Math.ceil((earned / max) * 100)
     }
 
-    console.log("Final Edge Case Score: ", edgeCaseScore)
 
     let submissionData: Submission
     try {
@@ -151,9 +117,9 @@ export default class SubmitSolution implements IUseCase<Submission> {
         difficulty: problem.difficulty,
         problem_rating: problem.rating,
         approach_score: services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights],
-        identified_approach: data.user_explanation_identified_apporach,
-        pass: data.user_explanation_pass,
-        missing_points: data.missing_points_in_user_explanation,
+        identified_approach: validatedData.user_explanation_identified_apporach,
+        pass: validatedData.user_explanation_pass,
+        missing_points: validatedData.missing_points_in_user_explanation,
         edge_cases: finalEdgeCaseData,
         edge_case_score: edgeCaseScore,
         submitted_at: new Date().toISOString()
