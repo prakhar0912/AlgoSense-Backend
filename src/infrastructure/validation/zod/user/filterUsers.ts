@@ -12,11 +12,14 @@ const filterUserValidator = z.object({
   banned: z.boolean(),
   email_verified: z.boolean(),
   scores: z.object({
-    approaches_score: z.number(),
-    days_logged_in: z.array(z.string().max(100, "Must be less than 100 characters").transform((val) => sanitize(val))),
-    consistency_score: z.number(),
-    edge_case_score: z.number(),
-    total_score: z.number()
+    initial_elo_rating: z.number().min(1000).max(4000),
+    elo_rating: z.number().min(1000).max(4000),
+    topic_ratings: z.object(),
+    approaches_score: z.literal(0),
+    days_logged_in: z.array(z.string().max(100, "Should be less than 100")),
+    consistency_score: z.literal(0),
+    edge_case_score: z.literal(0),
+    total_score: z.literal(0)
   }).partial().strict().nullable(),
   last_5_submissions: z.array(z.object({
     submission_id: z.string().max(500, "Must be less than 500 characters").transform((val) => sanitize(val)),
@@ -34,8 +37,5 @@ const filterUserValidator = z.object({
   .partial()
   .strict()
   .nullish()
-
-// let a = new ZodValidator(filterUserValidator)
-// console.log(a.validate({ email: undefined }))
 
 export default new ZodValidator(filterUserValidator)

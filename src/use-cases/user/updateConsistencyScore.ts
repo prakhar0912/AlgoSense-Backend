@@ -10,7 +10,6 @@ export default class UpdateConsistencyScore implements IUseCase<UserScores> {
     private getConsistencyScore: (daysLoggedIn: string[]) => number
   ) { }
   async call(userId: string, userScores: User['scores']): Promise<UserScores> {
-    //TODO: Implement this use case on almost every route
     const daysLoggedIn = userScores && userScores.days_logged_in ? userScores.days_logged_in : []
     if (!userScores || daysLoggedIn.length === 0) {
       daysLoggedIn.push(new Date().toISOString())

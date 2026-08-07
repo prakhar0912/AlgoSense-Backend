@@ -31,6 +31,7 @@ const userController = new UserController(
 
 const router = express.Router()
 
+
 router.get('/profile', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.payload.sub
@@ -38,7 +39,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
       throw new UnauthorizedError('User ID is required')
     }
 
-    const result = await userController.getProfile({ userId: "0197f96c-b278-7f64-a32f-dae3cabe1ff0" })
+    const result = await userController.getProfile({ userId })
     res.send(result)
   } catch (err) {
     next(err)
@@ -53,7 +54,7 @@ router.get('/submissions', async (req: Request, res: Response, next: NextFunctio
       throw new UnauthorizedError('User ID is required')
     }
     const { page, perPage } = req.query as unknown as { page: number; perPage: number }
-    const result = await userController.getUserSubmissions({ userId: "0197f96c-b278-7f64-a32f-dae3cabe1ff0", params: { page, perPage } })
+    const result = await userController.getUserSubmissions({ userId, params: { page, perPage } })
     res.send(result)
   } catch (err) {
     next(err)
@@ -65,11 +66,12 @@ router.post('/submitSolution', async (req: Request, res: Response, next: NextFun
   try {
 
     const userId = req.auth?.payload.sub
+    console.dir(req.auth)
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
     const body = req.body
-    const success = await userController.submitAnswer({ body, userId: "019fc06b-c22d-79a3-9402-fd982ae4bb26" })
+    const success = await userController.submitAnswer({ body, userId })
     res.send({ success })
   } catch (err) {
     next(err)

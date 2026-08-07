@@ -2,10 +2,6 @@ import ZodValidator from "../validator.js";
 import { sanitize } from "isomorphic-dompurify";
 import z from 'zod'
 
-//TODO: Might not coerce values to required types, required for further processing
-
-
-
 
 const modelResponseValidator = z.object({
   user_explanation_rating: z.enum(["optimal", "correct", "partially_correct", "incorrect"]),

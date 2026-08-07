@@ -15,7 +15,7 @@ export default class Submission {
   edge_cases!: { description: string, importance: "critical" | "high" | "medium" | "low", coverage: "correct" | "partial" | "incorrect" | "missing" }[] | []
   edge_case_score!: number
   submitted_at!: string
-  elo_dif!: number
+  elo_diff!: number
 }
 // id uuid NOT NULL DEFAULT uuidv7(),
 //     user_id uuid NOT NULL,

@@ -192,17 +192,17 @@ function toFiniteNumber(value: unknown): number {
   return 0
 }
 
-function toStringArray(value: unknown): string[] {
-  if (typeof value === 'string') {
-    return value.trim().length > 0 ? [value] : []
-  }
-
-  if (!Array.isArray(value)) {
-    return []
-  }
-
-  return value.filter((item): item is string => typeof item === 'string')
-}
+// function toStringArray(value: unknown): string[] {
+//   if (typeof value === 'string') {
+//     return value.trim().length > 0 ? [value] : []
+//   }
+//
+//   if (!Array.isArray(value)) {
+//     return []
+//   }
+//
+//   return value.filter((item): item is string => typeof item === 'string')
+// }
 
 function toIsoStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
@@ -284,10 +284,7 @@ function normalizeTopicRatings(value: unknown): UserScores['topic_ratings'] {
   return topicRatings as UserScores['topic_ratings']
 }
 
-function normalizeScores(value: unknown): UserScores | null {
-  if (value === null || value === undefined) {
-    return null
-  }
+function normalizeScores(value: unknown): UserScores {
 
   const raw = isRecord(value) ? value : {}
   const scores = new UserScores()
@@ -352,6 +349,7 @@ export default class UserDAO implements IUserDAO {
   async create(userData: User) {
     const query = `
       INSERT INTO users (
+        id,
         email,
         first_name,
         last_name,
@@ -363,11 +361,18 @@ export default class UserDAO implements IUserDAO {
         email_verified,
         email_notifications_enabled
       )
-      VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8::jsonb[], $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb[], $10, $11)
+      ON CONFLICT (id)
+      DO UPDATE
+      SET
+      email = EXCLUDED.email,
+      first_name = EXCLUDED.first_name,
+      email_verified = EXCLUDED.email_verified
       RETURNING ${buildSelectColumns()}
     `
 
     const params = [
+      userData.id,
       userData.email,
       userData.first_name ?? null,
       userData.last_name ?? null,

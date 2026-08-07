@@ -32,7 +32,7 @@ type SubmissionRow = QueryResultRow & {
   edge_cases: unknown;
   edge_case_score: number | string | null;
   submitted_at: string | Date | null;
-  elo_dif: number | string | null;
+  elo_diff: number | string | null;
 };
 
 type SubmissionScoreRow = QueryResultRow & {
@@ -59,7 +59,7 @@ const SUBMISSION_COLUMNS = [
   "edge_cases",
   "edge_case_score",
   "submitted_at",
-  "elo_diff AS elo_dif",
+  "elo_diff",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -269,7 +269,7 @@ function normalizeSubmissionRow(row: SubmissionRow): Submission {
   submission.edge_cases = toEdgeCaseArray(raw.edge_cases ?? row.edge_cases);
   submission.edge_case_score = toFiniteNumber(raw.edge_case_score ?? row.edge_case_score);
   submission.submitted_at = toIsoString(raw.submitted_at ?? row.submitted_at ?? new Date());
-  submission.elo_dif = toFiniteNumber(raw.elo_dif ?? row.elo_dif);
+  submission.elo_diff = toFiniteNumber(raw.elo_diff ?? row.elo_diff);
 
   return submission;
 }
@@ -315,7 +315,7 @@ export default class SubmissionDAO implements ISubmissionDAO {
       toEdgeCaseArray(submissionPayload.edge_cases),
       submissionPayload.edge_case_score,
       submissionPayload.submitted_at ? toIsoString(submissionPayload.submitted_at) : new Date().toISOString(),
-      submissionPayload.elo_dif ?? 0,
+      submissionPayload.elo_diff ?? 0,
     ];
 
     const result = await this.db.query<SubmissionRow>(query, params);

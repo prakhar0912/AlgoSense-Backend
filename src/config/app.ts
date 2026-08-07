@@ -14,6 +14,13 @@ export default {
     password: String(process.env.PGPASSWORD),
     dbName: String(process.env.PGDATABASE) as string,
   },
+  // auth0: {
+  //   issuer_base_url: String(process.env.ISSUER_BASE_URL),
+  //   client_id: String(process.env.CLIENT_ID),
+  //   secret: String(process.env.SECRET),
+  //   base_url: String(process.env.BASE_URL),
+  //   port: Number(process.env.PORT)
+  // }
 }
 
 

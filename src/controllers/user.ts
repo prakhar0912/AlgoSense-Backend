@@ -40,20 +40,20 @@ export default class UserController {
   ) { }
 
 
-  private validatePaginationParams(params?: IRequest['params']) {
-    const page = params?.page;
-    const perPage = params?.perPage;
-
-    if (
-      (page !== undefined && typeof page !== 'number') ||
-      (perPage !== undefined && typeof perPage !== 'number')
-    ) {
-      throw new ValidationError('Params are required to be numbers');
-    }
-
-    return { page, perPage };
-  }
-
+  // private validatePaginationParams(params?: IRequest['params']) {
+  //   const page = params?.page;
+  //   const perPage = params?.perPage;
+  //
+  //   if (
+  //     (page !== undefined && typeof page !== 'number') ||
+  //     (perPage !== undefined && typeof perPage !== 'number')
+  //   ) {
+  //     throw new ValidationError('Params are required to be numbers');
+  //   }
+  //
+  //   return { page, perPage };
+  // }
+  //
   //Helper Functions above
 
   async getUserSubmissions(request: IRequest) {
@@ -101,12 +101,12 @@ export default class UserController {
       throw new ValidationError('created_at should be a string')
     }
 
-    if (!body.email_verified || typeof body.email_verified !== "boolean") {
-      throw new ValidationError('email_verified should be a boolean')
+    if (typeof body.email_verified !== "boolean") {
+      throw new ValidationError('email_verified should be a boolean', [{ field: "email_verified", message: `Recieved: ${body.email_verified}` }])
     }
 
 
-    if (body.email_notifications_enabled && typeof body.email_notifications_enabled !== "boolean") {
+    if (typeof body.email_notifications_enabled !== "boolean") {
       throw new ValidationError('email_notifications_enabled should be a boolean')
     }
 

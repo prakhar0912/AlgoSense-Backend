@@ -8,7 +8,7 @@ export default class User {
   last_name?: string | undefined
   role!: 'admin' | 'user'
   banned!: boolean
-  scores?: UserScores | null
+  scores?: UserScores
   created_at!: string
   last_5_submissions?: ShortSubmission[] | null
   email_verified!: boolean

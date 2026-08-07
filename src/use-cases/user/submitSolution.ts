@@ -107,6 +107,80 @@ export default class SubmitSolution implements IUseCase<Submission> {
       edgeCaseScore = Math.ceil((earned / max) * 100)
     }
 
+    const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
+
+
+    const userPerformance: number = 0.55 * (finalApproachScore / 100) +
+      0.25 * (edgeCaseScore / 100) +
+      0.20 * (services.weights.problemDifficultyWeights[problem.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
+
+    console.log("User Performance: ", userPerformance)
+
+    let userEloRating = userScores?.elo_rating
+    if (!userEloRating) {
+      userEloRating = 1500
+    }
+
+    let effectiveUserRating: number = 0.5 * userEloRating
+
+    let totalPrimaryTopicRating: number = 0
+    for (const topic of problem.primary_topics) {
+      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
+        totalPrimaryTopicRating +=
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
+      }
+    }
+    const weightedAveragePrimaryTopicRating: number =
+      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length) ||
+        totalPrimaryTopicRating === 0 ?
+        0.3 * userEloRating : 0.3 * (totalPrimaryTopicRating / problem.primary_topics.length)
+
+    let totalSecondaryTopicRating: number = 0
+    for (const topic of problem.secondary_topics) {
+      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
+        totalSecondaryTopicRating +=
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
+      }
+    }
+    const weightedAverageSecondaryTopicRating: number =
+      Number.isNaN(totalSecondaryTopicRating / problem.secondary_topics.length) ||
+        totalSecondaryTopicRating === 0 ?
+        0.2 * userEloRating : 0.2 * (totalSecondaryTopicRating / problem.secondary_topics.length)
+
+    effectiveUserRating += weightedAveragePrimaryTopicRating + weightedAverageSecondaryTopicRating
+
+    effectiveUserRating = Math.floor(effectiveUserRating)
+
+
+    console.log("Effective User Rating: ", effectiveUserRating)
+    const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
+
+    console.log("Expected user performance: ", expectedUserPerformance)
+
+    const ratingChange = services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
+
+    console.log("Rating Change: ", ratingChange)
+    if (Number.isNaN(ratingChange)) {
+      throw new InternalServerError('Rating Change value is not a number')
+    }
+
+
+    let topicRatingsChange: Record<string, number> = {}
+    for (const topic of problem.primary_topics) {
+      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
+        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
+          userScores.elo_rating + ratingChange :
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + ratingChange
+      }
+    }
+    for (const topic of problem.secondary_topics) {
+      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
+        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
+          userScores.elo_rating + 0.5 * ratingChange :
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + 0.5 * ratingChange
+      }
+    }
+
 
     let submissionData: Submission
     try {
@@ -116,19 +190,19 @@ export default class SubmitSolution implements IUseCase<Submission> {
         user_input: userInput,
         difficulty: problem.difficulty,
         problem_rating: problem.rating,
-        approach_score: services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights],
+        approach_score: finalApproachScore,
         identified_approach: validatedData.user_explanation_identified_apporach,
         pass: validatedData.user_explanation_pass,
         missing_points: validatedData.missing_points_in_user_explanation,
         edge_cases: finalEdgeCaseData,
         edge_case_score: edgeCaseScore,
-        submitted_at: new Date().toISOString()
+        submitted_at: new Date().toISOString(),
+        elo_diff: ratingChange,
       })
     }
     catch (e) {
       throw new InternalServerError('Failed to add submission to database', e)
     }
-
 
     let userSubmissionsData: { approach_score: number, submitted_at: string, difficulty: string, edge_case_score: number, problem_id: string }[] | []
 
@@ -157,90 +231,18 @@ export default class SubmitSolution implements IUseCase<Submission> {
     let totalScore = services.weights.totalScoreWeights.approach_score * mergedApproachScore
       + services.weights.totalScoreWeights.edge_case_score * mergedEdgeCaseScore
 
-
-
     if (userScores !== undefined && userScores !== null && Number.isFinite(userScores.consistency_score)) {
       totalScore += services.weights.totalScoreWeights.consistency_score * userScores?.consistency_score
     }
-
-
-    const userPerformance: number = 0.55 * (submissionData.approach_score / 100) +
-      0.25 * (submissionData.edge_case_score / 100) +
-      0.20 * (services.weights.problemDifficultyWeights[submissionData.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
-
-    console.log("User Performance: ", userPerformance)
-
-    if (!userScores?.elo_rating) {
-      throw new InternalServerError("User's ELO rating is: null or undefined")
-    }
-
-    let effectiveUserRating: number = 0.5 * userScores?.elo_rating
-
-    let totalPrimaryTopicRating: number = 0
-    for (const topic of problem.primary_topics) {
-      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
-        totalPrimaryTopicRating +=
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
-      }
-    }
-    const weightedAveragePrimaryTopicRating: number =
-      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length) ||
-        totalPrimaryTopicRating === 0 ?
-        0.3 * userScores?.elo_rating : 0.3 * (totalPrimaryTopicRating / problem.primary_topics.length)
-
-    let totalSecondaryTopicRating: number = 0
-    for (const topic of problem.secondary_topics) {
-      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
-        totalSecondaryTopicRating +=
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
-      }
-    }
-    const weightedAverageSecondaryTopicRating: number =
-      Number.isNaN(totalSecondaryTopicRating / problem.secondary_topics.length) ||
-        totalSecondaryTopicRating === 0 ?
-        0.2 * userScores?.elo_rating : 0.2 * (totalSecondaryTopicRating / problem.secondary_topics.length)
-
-    effectiveUserRating += weightedAveragePrimaryTopicRating + weightedAverageSecondaryTopicRating
-
-    effectiveUserRating = Math.floor(effectiveUserRating)
-
-
-    console.log("Effective User Rating: ", effectiveUserRating)
-    const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
-
-    console.log("Expected user performance: ", expectedUserPerformance)
-
-    const ratingChange = services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
-
-    console.log("Rating Change: ", ratingChange)
-    if (Number.isNaN(ratingChange)) {
-      throw new InternalServerError('Rating Change value is not a number')
-    }
-
-
-    let topicRatingsChange: Record<string, number> = {}
-    for (const topic of problem.primary_topics) {
-      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
-        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
-          userScores.elo_rating + ratingChange :
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + ratingChange
-      }
-    }
-    for (const topic of problem.secondary_topics) {
-      if (Object.hasOwn(userScores?.topic_ratings, topic)) {
-        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
-          userScores.elo_rating + 0.5 * ratingChange :
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + 0.5 * ratingChange
-      }
-    }
-
     console.log('Final User Scores: ', {
       approaches_score: mergedApproachScore,
       edge_case_score: mergedEdgeCaseScore,
       total_score: totalScore,
-      elo_rating: userScores.elo_rating + ratingChange,
+      elo_rating: userEloRating + ratingChange,
       topic_ratings: topicRatingsChange
     })
+
+
 
     let updatedUserScores: UserScores
     try {
@@ -248,7 +250,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
         approaches_score: mergedApproachScore,
         edge_case_score: mergedEdgeCaseScore,
         total_score: totalScore,
-        elo_rating: userScores.elo_rating + ratingChange,
+        elo_rating: userEloRating + ratingChange,
         topic_ratings: topicRatingsChange
       })
     }

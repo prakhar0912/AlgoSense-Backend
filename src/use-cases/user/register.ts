@@ -36,17 +36,6 @@ export default class RegisterUser implements IUseCase<User> {
 
 
     const { id, email, first_name, last_name, created_at, email_verified, email_notifications_enabled } = validationResult.data
-    let existingUser: User | null
-    try {
-      existingUser = await this.userDAO.findByEmail(email)
-    }
-    catch (e) {
-      throw new InternalServerError('Failed to check if user already exists', e)
-    }
-    if (existingUser) {
-      throw new ValidationError('Email is already in use', [{ field: 'email', message: 'Email is already in use' }])
-    }
-
 
 
     let newUser: User
