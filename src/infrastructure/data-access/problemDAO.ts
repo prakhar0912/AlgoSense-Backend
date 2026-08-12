@@ -26,6 +26,33 @@ type ProblemRow = QueryResultRow & {
   evaluation_criteria: unknown
 }
 
+type PublicProblem = Omit<Problem, "hints" | "evaluation_criteria" | "approaches">
+
+type PublicProblemRow = QueryResultRow & {
+  id: string
+  title: string
+  description: string
+  rating: number | string
+  slug: string
+  primary_topics: unknown
+  secondary_topics: unknown
+  similar_problems: unknown
+  difficulty: number | string
+}
+
+type PublicFilterableProblemColumn = keyof Pick<
+  Problem,
+  | "id"
+  | "title"
+  | "description"
+  | "rating"
+  | "slug"
+  | "primary_topics"
+  | "secondary_topics"
+  | "similar_problems"
+  | "difficulty"
+>
+
 type FilterableProblemColumn = keyof Pick<
   Problem,
   | "id"
@@ -72,6 +99,18 @@ const PROBLEM_COLUMNS = [
   "evaluation_criteria",
 ] as const
 
+const PUBLIC_PROBLEM_COLUMNS = [
+  "id",
+  "title",
+  "description",
+  "rating",
+  "slug",
+  "primary_topics",
+  "secondary_topics",
+  "similar_problems",
+  "difficulty",
+] as const
+
 const FILTERABLE_COLUMNS: ReadonlyMap<FilterableProblemColumn, string> = new Map([
   ["id", "id"],
   ["title", "title"],
@@ -85,6 +124,18 @@ const FILTERABLE_COLUMNS: ReadonlyMap<FilterableProblemColumn, string> = new Map
   ["difficulty", "difficulty"],
   ["approaches", "approaches"],
   ["evaluation_criteria", "evaluation_criteria"],
+])
+
+const PUBLIC_FILTERABLE_COLUMNS: ReadonlyMap<PublicFilterableProblemColumn, string> = new Map([
+  ["id", "id"],
+  ["title", "title"],
+  ["description", "description"],
+  ["rating", "rating"],
+  ["slug", "slug"],
+  ["primary_topics", "primary_topics"],
+  ["secondary_topics", "secondary_topics"],
+  ["similar_problems", "similar_problems"],
+  ["difficulty", "difficulty"],
 ])
 
 const UPDATABLE_COLUMNS: ReadonlyMap<UpdatableProblemColumn, string> = new Map([
@@ -103,6 +154,10 @@ const UPDATABLE_COLUMNS: ReadonlyMap<UpdatableProblemColumn, string> = new Map([
 
 function buildSelectColumns(): string {
   return PROBLEM_COLUMNS.join(", ")
+}
+
+function buildPublicSelectColumns(): string {
+  return PUBLIC_PROBLEM_COLUMNS.join(", ")
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -252,6 +307,26 @@ function normalizeProblemRow(row: ProblemRow): Problem {
   return problem
 }
 
+function normalizePublicProblemRow(row: PublicProblemRow): Problem {
+  const problem = new Problem()
+
+  problem.id = row.id
+  problem.title = row.title
+  problem.description = row.description
+  problem.rating = toFiniteNumber(row.rating)
+  problem.slug = row.slug
+  problem.primary_topics = toStringArray(row.primary_topics)
+  problem.secondary_topics = toStringArray(row.secondary_topics)
+  problem.similar_problems = toStringArray(row.similar_problems)
+  problem.difficulty = toDifficulty(row.difficulty)
+
+  Reflect.deleteProperty(problem, "hints")
+  Reflect.deleteProperty(problem, "approaches")
+  Reflect.deleteProperty(problem, "evaluation_criteria")
+
+  return problem
+}
+
 function toDifficultyValue(value: unknown): Problem["difficulty"] {
   return toDifficulty(value)
 }
@@ -280,6 +355,58 @@ function buildProblemValueClause(column: keyof Problem, placeholder: string): st
   }
 
   return placeholder
+}
+
+function buildPublicFilterClause(filters: Partial<PublicProblem>): { whereClause: string; params: unknown[] } {
+  const clauses: string[] = []
+  const params: unknown[] = []
+
+  if (filters === undefined || filters === null) {
+    return {
+      whereClause: "",
+      params: [],
+    }
+  }
+
+  for (const [rawKey, rawValue] of Object.entries(filters)) {
+    if (rawValue === undefined) {
+      continue
+    }
+
+    if (!PUBLIC_FILTERABLE_COLUMNS.has(rawKey as PublicFilterableProblemColumn)) {
+      continue
+    }
+
+    const key = rawKey as PublicFilterableProblemColumn
+    const column = PUBLIC_FILTERABLE_COLUMNS.get(key)
+    if (!column) {
+      continue
+    }
+
+    params.push(key === "difficulty" ? toDifficultyValue(rawValue) : rawValue)
+
+    if (
+      key === "primary_topics"
+      || key === "secondary_topics"
+      || key === "similar_problems"
+    ) {
+      clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}::varchar[]`)
+    }
+    else if (key === "difficulty") {
+      clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}::difficulty_enum`)
+    }
+    else if (key === "rating") {
+      clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}::double precision`)
+    }
+    else {
+      clauses.push(`${column} IS NOT DISTINCT FROM $${params.length}`)
+    }
+  }
+
+  return {
+    whereClause: clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "",
+    params,
+  }
 }
 
 export default class ProblemDAO implements IProblemDAO {
@@ -424,6 +551,57 @@ export default class ProblemDAO implements IProblemDAO {
     )
 
     return result.rows[0] ? normalizeProblemRow(result.rows[0]) : null
+  }
+
+  async listForUser(filters: Partial<PublicProblem>, page: number = 1, perPage: number = 10): Promise<IPaginated<PublicProblem>> {
+    const { whereClause, params } = buildPublicFilterClause(filters)
+    const offset = (page - 1) * perPage
+    const result = await this.db.query<PublicProblemRow>(
+      `
+        SELECT ${buildPublicSelectColumns()}
+        FROM problems
+        ${whereClause}
+        ORDER BY title ASC, id ASC
+        LIMIT $${params.length + 1}
+        OFFSET $${params.length + 2}
+      `,
+      [...params, perPage, offset],
+    )
+
+    return {
+      data: result.rows.map((row) => normalizePublicProblemRow(row)),
+      pagination: {
+        page,
+        perPage,
+      },
+    }
+  }
+
+  async findByIdForUsers(problemId: string): Promise<PublicProblem | null> {
+    const result = await this.db.query<PublicProblemRow>(
+      `SELECT ${buildPublicSelectColumns()} FROM problems WHERE id = $1 LIMIT 1`,
+      [problemId],
+    )
+
+    return result.rows[0] ? normalizePublicProblemRow(result.rows[0]) : null
+  }
+
+  async findBySlugForUsers(problemSlug: string): Promise<PublicProblem | null> {
+    const result = await this.db.query<PublicProblemRow>(
+      `SELECT ${buildPublicSelectColumns()} FROM problems WHERE slug = $1 LIMIT 1`,
+      [problemSlug],
+    )
+
+    return result.rows[0] ? normalizePublicProblemRow(result.rows[0]) : null
+  }
+
+  async findBySlug(problemSlug: string): Promise<Problem | null> {
+    const result = await this.db.query<PublicProblemRow>(
+      `SELECT ${buildSelectColumns()} FROM problems WHERE slug = $1 LIMIT 1`,
+      [problemSlug],
+    )
+
+    return result.rows[0] ? normalizePublicProblemRow(result.rows[0]) : null
   }
 
   private buildFilterClause(filters: Partial<Problem>): { whereClause: string; params: unknown[] } {

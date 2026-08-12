@@ -33,6 +33,20 @@ type ProblemRow = QueryResultRow & {
   evaluation_criteria: unknown
 }
 
+type PublicProblem = Omit<Problem, "hints" | "evaluation_criteria" | "approaches">
+
+type PublicProblemRow = QueryResultRow & {
+  id: string
+  title: string
+  description: string
+  rating: number | string
+  slug: string
+  primary_topics: unknown
+  secondary_topics: unknown
+  similar_problems: unknown
+  difficulty: number | string
+}
+
 type ProblemInsertPayload = Omit<Problem, "id">
 
 function buildApproach(overrides: Partial<ProblemApproach> = {}): ProblemApproach {
@@ -83,6 +97,36 @@ function buildProblem(overrides: Partial<Problem> = {}): Problem {
     evaluation_criteria: ["Correctness"],
     ...overrides,
   })
+}
+
+function buildPublicProblem(overrides: Partial<PublicProblem> = {}): PublicProblem {
+  return {
+    id: "problem-123",
+    title: "Two Sum",
+    description: "Find two numbers that add up to a target value.",
+    rating: 4.5,
+    slug: "two-sum",
+    primary_topics: ["hashTable"],
+    secondary_topics: ["array"],
+    similar_problems: ["three-sum", "four-sum"],
+    difficulty: "medium",
+    ...overrides,
+  }
+}
+
+function buildPublicProblemRow(overrides: Partial<PublicProblemRow> = {}): PublicProblemRow {
+  return {
+    id: "problem-123",
+    title: "Two Sum",
+    description: "Find two numbers that add up to a target value.",
+    rating: 4.5,
+    slug: "two-sum",
+    primary_topics: ["hashTable"],
+    secondary_topics: ["array"],
+    similar_problems: ["three-sum", "four-sum"],
+    difficulty: "medium",
+    ...overrides,
+  }
 }
 
 describe("ProblemDAO unit", () => {
@@ -234,6 +278,200 @@ describe("ProblemDAO unit", () => {
     } as never)
 
     await expect(dao.findByName("missing-problem")).resolves.toBeNull()
+  })
+
+  it("returns public problem projections without selecting hidden columns", async () => {
+    const firstRow = buildPublicProblemRow({
+      id: "problem-1",
+      title: "Alpha",
+      slug: "alpha",
+      similar_problems: ["alpha-similar-1", "alpha-similar-2"],
+    })
+    const secondRow = buildPublicProblemRow({
+      id: "problem-2",
+      title: "Beta",
+      slug: "beta",
+      similar_problems: ["beta-similar-1", "beta-similar-2"],
+    })
+
+    query.mockResolvedValueOnce({
+      rows: [secondRow, firstRow],
+      rowCount: 2,
+    } as never)
+
+    const result = await dao.listForUser({
+      difficulty: "medium",
+      slug: "alpha",
+      similar_problems: ["alpha-similar-1", "alpha-similar-2"],
+    })
+
+    expect(query).toHaveBeenCalledTimes(1)
+    const call = query.mock.calls[0]
+    if (!call) {
+      throw new Error("Expected the DAO to issue one public list query")
+    }
+
+    const [sql, params] = call
+    expect(sql).toContain("SELECT id, title, description, rating, slug, primary_topics, secondary_topics, similar_problems, difficulty")
+    expect(sql).toContain("FROM problems")
+    expect(sql).not.toContain("hints")
+    expect(sql).not.toContain("approaches")
+    expect(sql).not.toContain("evaluation_criteria")
+    expect(sql).toContain("difficulty IS NOT DISTINCT FROM $1::difficulty_enum")
+    expect(sql).toContain("slug IS NOT DISTINCT FROM $2")
+    expect(sql).toContain("similar_problems IS NOT DISTINCT FROM $3::varchar[]")
+    expect(sql).toContain("LIMIT $4")
+    expect(sql).toContain("OFFSET $5")
+    expect(params).toEqual([
+      "medium",
+      "alpha",
+      ["alpha-similar-1", "alpha-similar-2"],
+      10,
+      0,
+    ])
+    expect(result).toEqual({
+      data: [
+        buildPublicProblem({
+          id: "problem-2",
+          title: "Beta",
+          slug: "beta",
+          similar_problems: ["beta-similar-1", "beta-similar-2"],
+        }),
+        buildPublicProblem({
+          id: "problem-1",
+          title: "Alpha",
+          slug: "alpha",
+          similar_problems: ["alpha-similar-1", "alpha-similar-2"],
+        }),
+      ],
+      pagination: {
+        page: 1,
+        perPage: 10,
+      },
+    })
+    expect(result.data[0]).not.toHaveProperty("hints")
+    expect(result.data[0]).not.toHaveProperty("approaches")
+    expect(result.data[0]).not.toHaveProperty("evaluation_criteria")
+  })
+
+  it("returns a public problem by id and null when the row is missing", async () => {
+    const row = buildPublicProblemRow({
+      id: "problem-456",
+      title: "Public Alpha",
+      slug: "public-alpha",
+    })
+
+    query.mockResolvedValueOnce({
+      rows: [row],
+      rowCount: 1,
+    } as never)
+
+    const result = await dao.findByIdForUsers("problem-456")
+
+    expect(query).toHaveBeenCalledTimes(1)
+    const call = query.mock.calls[0]
+    if (!call) {
+      throw new Error("Expected the DAO to issue one public id query")
+    }
+
+    const [sql, params] = call
+    expect(sql).toContain("SELECT id, title, description, rating, slug, primary_topics, secondary_topics, similar_problems, difficulty FROM problems WHERE id = $1 LIMIT 1")
+    expect(params).toEqual(["problem-456"])
+    expect(result).toEqual(buildPublicProblem({
+      id: "problem-456",
+      title: "Public Alpha",
+      slug: "public-alpha",
+    }))
+    expect(result).not.toHaveProperty("hints")
+    expect(result).not.toHaveProperty("approaches")
+    expect(result).not.toHaveProperty("evaluation_criteria")
+
+    query.mockResolvedValueOnce({
+      rows: [],
+      rowCount: 0,
+    } as never)
+
+    await expect(dao.findByIdForUsers("missing-problem")).resolves.toBeNull()
+  })
+
+  it("returns a public problem by slug for user views and null when the row is missing", async () => {
+    const row = buildPublicProblemRow({
+      id: "problem-789",
+      title: "Public Beta",
+      slug: "public-beta",
+    })
+
+    query.mockResolvedValueOnce({
+      rows: [row],
+      rowCount: 1,
+    } as never)
+
+    const result = await dao.findBySlugForUsers("public-beta")
+
+    expect(query).toHaveBeenCalledTimes(1)
+    const call = query.mock.calls[0]
+    if (!call) {
+      throw new Error("Expected the DAO to issue one public slug query")
+    }
+
+    const [sql, params] = call
+    expect(sql).toContain("SELECT id, title, description, rating, slug, primary_topics, secondary_topics, similar_problems, difficulty FROM problems WHERE slug = $1 LIMIT 1")
+    expect(params).toEqual(["public-beta"])
+    expect(result).toEqual(buildPublicProblem({
+      id: "problem-789",
+      title: "Public Beta",
+      slug: "public-beta",
+    }))
+    expect(result).not.toHaveProperty("hints")
+    expect(result).not.toHaveProperty("approaches")
+    expect(result).not.toHaveProperty("evaluation_criteria")
+
+    query.mockResolvedValueOnce({
+      rows: [],
+      rowCount: 0,
+    } as never)
+
+    await expect(dao.findBySlugForUsers("missing-slug")).resolves.toBeNull()
+  })
+
+  it("returns a public problem by slug with the same public projection as the user lookup", async () => {
+    const row = buildPublicProblemRow({
+      id: "problem-321",
+      title: "Public Gamma",
+      slug: "public-gamma",
+    })
+
+    query.mockResolvedValueOnce({
+      rows: [row],
+      rowCount: 1,
+    } as never)
+
+    const result = await dao.findBySlug("public-gamma")
+
+    expect(query).toHaveBeenCalledTimes(1)
+    const call = query.mock.calls[0]
+    if (!call) {
+      throw new Error("Expected the DAO to issue one slug query")
+    }
+
+    const [sql, params] = call
+    expect(sql).toContain("SELECT id, title, description, rating, slug, primary_topics, secondary_topics, similar_problems, difficulty FROM problems WHERE slug = $1 LIMIT 1")
+    expect(params).toEqual(["public-gamma"])
+    expect(result).toEqual(buildPublicProblem({
+      id: "problem-321",
+      title: "Public Gamma",
+      slug: "public-gamma",
+    }))
+    expect(result).not.toHaveProperty("hints")
+    expect(result).not.toHaveProperty("approaches")
+    expect(result).not.toHaveProperty("evaluation_criteria")
+
+    query.mockResolvedValueOnce({
+      rows: [],
+      rowCount: 0,
+    } as never)
+
+    await expect(dao.findBySlug("missing-slug")).resolves.toBeNull()
   })
 
   it("returns a paginated payload for filtered problems", async () => {

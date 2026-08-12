@@ -18,6 +18,7 @@ type TimingMetrics = {
   viewByIdMs: number[];
   viewByUserMs: number[];
   viewScoresByUserMs: number[];
+  viewNumberOfSubmissionsPerUserPerProblemMs: number[];
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -31,6 +32,7 @@ const metrics: TimingMetrics = {
   viewByIdMs: [],
   viewByUserMs: [],
   viewScoresByUserMs: [],
+  viewNumberOfSubmissionsPerUserPerProblemMs: [],
 };
 
 const problemDAO = new ProblemDAO(client);
@@ -163,7 +165,7 @@ function buildSubmissionInput(
     }],
     edge_case_score: 50,
     submitted_at: submittedAt,
-    elo_dif: 0,
+    elo_diff: 0,
     ...overrides,
   };
 }
@@ -205,7 +207,7 @@ afterAll(async () => {
     `[SubmissionDAO integration] setup=${metrics.setupMs.toFixed(5)} ms seed=${metrics.seedMs.toFixed(5)} ms cleanup=${metrics.cleanupMs.toFixed(5)} ms created=${createdFixturesTotal} cleaned=${cleanedFixturesTotal} total=${totalRuntimeMs.toFixed(5)} ms`,
   );
   console.info(
-    `[SubmissionDAO integration] create=${formatAverage(metrics.createMs)} viewById=${formatAverage(metrics.viewByIdMs)} viewByUser=${formatAverage(metrics.viewByUserMs)} viewScoresByUser=${formatAverage(metrics.viewScoresByUserMs)}`,
+    `[SubmissionDAO integration] create=${formatAverage(metrics.createMs)} viewById=${formatAverage(metrics.viewByIdMs)} viewByUser=${formatAverage(metrics.viewByUserMs)} viewScoresByUser=${formatAverage(metrics.viewScoresByUserMs)} viewNumberOfSubmissionsPerUserPerProblem=${formatAverage(metrics.viewNumberOfSubmissionsPerUserPerProblemMs)}`,
   );
 
   client.release();
@@ -285,7 +287,7 @@ describe("SubmissionDAO integration", () => {
       expect(created.problem_rating).toBeGreaterThan(0);
       expect(created.hints_used).toHaveLength(1);
       expect(created.missing_points).toContain("missing-");
-      expect(created.elo_dif).toBe(0);
+      expect(created.elo_diff).toBe(0);
     }
 
     const bestMediumSubmission = createdSubmissions[2];
@@ -305,7 +307,7 @@ describe("SubmissionDAO integration", () => {
       approach_score: 80,
       edge_case_score: 90,
       missing_points: `missing-${mediumProblem.id}`,
-      elo_dif: 0,
+      elo_diff: 0,
     });
 
     const paginated = await measure(metrics.viewByUserMs, () => submissionDAO.viewByUser(createdUser.id));
@@ -343,11 +345,18 @@ describe("SubmissionDAO integration", () => {
         submitted_at: new Date(Date.UTC(2026, 0, 1, 0, 0, 3)).toISOString(),
       },
     ]);
+
+    const submissionCount = await measure(
+      metrics.viewNumberOfSubmissionsPerUserPerProblemMs,
+      () => submissionDAO.viewNumberOfSubmissionsPerUserPerProblem(createdUser.id, mediumProblem.id),
+    );
+    expect(submissionCount).toBe(3);
   });
 
   it("returns null, an empty page, and an empty score projection for missing submissions", async () => {
     const missingSubmissionId = randomUUID();
     const missingUserId = randomUUID();
+    const missingProblemId = randomUUID();
 
     await expect(measure(metrics.viewByIdMs, () => submissionDAO.viewById(missingSubmissionId))).resolves.toBeNull();
     await expect(measure(metrics.viewByUserMs, () => submissionDAO.viewByUser(missingUserId))).resolves.toEqual({
@@ -358,5 +367,6 @@ describe("SubmissionDAO integration", () => {
       },
     });
     await expect(measure(metrics.viewScoresByUserMs, () => submissionDAO.viewScoresByUser(missingUserId))).resolves.toEqual([]);
+    await expect(measure(metrics.viewNumberOfSubmissionsPerUserPerProblemMs, () => submissionDAO.viewNumberOfSubmissionsPerUserPerProblem(missingUserId, missingProblemId))).resolves.toBe(0);
   });
 });

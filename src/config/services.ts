@@ -25,6 +25,13 @@ export default {
   },
   weights: {
     elo_k_weight: 24,
+    numberOfAttemptsModifier: {
+      0: 1,
+      1: 0.5,
+      2: 0.15,
+      maxNumber: 3,
+      maxValue: 0.05
+    },
     totalScoreWeights: {
       approach_score: 0.45,
       edge_case_score: 0.35,

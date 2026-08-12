@@ -2,7 +2,7 @@ import ZodValidator from "../validator.js";
 import { sanitize } from "isomorphic-dompurify";
 import z from 'zod'
 
-const updateProblemValidator =
+const updateProblemValidatorForAdmin =
   z.object({
     title: z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)),
     description: z.string().trim().min(10, 'description must be at least 10 characters long').max(1000, "Must be less than 1000 characters"),
@@ -27,8 +27,8 @@ const updateProblemValidator =
       })),
       pros: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
       cons: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)))
-    })),
+    }).partial()),
     evaluation_criteria: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)))
   }).partial().strict()
 
-export default new ZodValidator(updateProblemValidator)
+export default new ZodValidator(updateProblemValidatorForAdmin)

@@ -5,7 +5,7 @@ import NotFoundError from "../../errors/notFoundError.js";
 import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
 import type IUseCase from "../../interfaces/useCase.js";
 
-export default class GetProblem implements IUseCase<Problem> {
+export default class GetProblemByIdForAdmin implements IUseCase<Problem> {
   constructor(
     private problemDAO: IProblemDAO
   ) { }

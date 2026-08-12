@@ -1,3 +1,4 @@
+import type { Approach } from "../../entities/approach.js";
 import type Problem from "../../entities/problem.js";
 import InternalServerError from "../../errors/internalServerError.js";
 import ValidationError from "../../errors/validationError.js";
@@ -5,27 +6,30 @@ import type IPaginated from "../../interfaces/paginated.js";
 import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
 import type IUseCase from "../../interfaces/useCase.js";
 
+
 type OptionalWithUndefined<T> = {
   [K in keyof T]?: T[K] | undefined
 }
-type FilterProblemPayload = OptionalWithUndefined<
-  Omit<Partial<Problem>, "approaches" | "id" | 'hints' | 'evaluation_criteria'>>;
+type UpdateProblemPayload = OptionalWithUndefined<
+  Omit<Partial<Problem>, "approaches" | "id">
+  & {
+    approaches?: Partial<OptionalWithUndefined<Approach>[] | []>;
+  }>;
 
 
 
 
-
-export default class ListProblemsForUser implements IUseCase<IPaginated<Omit<Problem, 'approaches' | 'hints' | 'evaluation_criteria'>>> {
+export default class ListProblemsForAdmin implements IUseCase<IPaginated<Problem>> {
   constructor(
     private problemDAO: IProblemDAO,
   ) { }
-  async call(filters: FilterProblemPayload = {}, page: number = 1, perPage: number = 10): Promise<IPaginated<Omit<Problem, 'approaches' | 'hints' | 'evaluation_criteria'>>> {
+  async call(filters: UpdateProblemPayload = {}, page: number = 1, perPage: number = 10): Promise<IPaginated<Problem>> {
     if (page < 1 || perPage < 1 || !Number.isInteger(page) || !Number.isInteger(perPage) || !Number.isFinite(page) || !Number.isFinite(perPage)) {
       throw new ValidationError('Page and perPage must be positive whole integers')
     }
-    let paginatedProblems: IPaginated<Omit<Problem, 'approaches' | 'hints' | 'evaluation_criteria'>>
+    let paginatedProblems: IPaginated<Problem>
     try {
-      paginatedProblems = await this.problemDAO.listForUser(filters as Partial<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>>, page, perPage)
+      paginatedProblems = await this.problemDAO.list(filters as Partial<Problem>, page, perPage)
     }
     catch (e) {
       throw new InternalServerError('Error while fetching problems from DB')

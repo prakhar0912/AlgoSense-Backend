@@ -26,6 +26,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
     private submissionValidator: IValidator<ModelResponse>,
     private userSolutionValidator: IValidator<string>
   ) { }
+
   async call(userId: string, userScores: User['scores'], last5submissions: User['last_5_submissions'], problemId: string, userInput: string): Promise<Submission> {
 
     if (typeof userId !== "string" || typeof userId === "string" && userId.trim().length === 0) {
@@ -36,6 +37,9 @@ export default class SubmitSolution implements IUseCase<Submission> {
       throw new ValidationError('Problem ID value invalid')
     }
 
+    if (typeof userScores === 'undefined') {
+      throw new InternalServerError('User Data Malformed, userScores is undefined')
+    }
 
 
     let validatedUserInput: IValidatorResult<string>
@@ -109,55 +113,19 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
 
-
-    const userPerformance: number = 0.55 * (finalApproachScore / 100) +
-      0.25 * (edgeCaseScore / 100) +
-      0.20 * (services.weights.problemDifficultyWeights[problem.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
-
-    console.log("User Performance: ", userPerformance)
+    const {
+      mergedApproachScore,
+      mergedEdgeCaseScore,
+      totalScore,
+      numberOfAttempts
+    } = await this.calculateNewUserScores(userId, userScores, problem.id, finalApproachScore, edgeCaseScore, problem.difficulty)
 
     let userEloRating = userScores?.elo_rating
     if (!userEloRating) {
       userEloRating = 1500
     }
 
-    let effectiveUserRating: number = 0.5 * userEloRating
-
-    let totalPrimaryTopicRating: number = 0
-    for (const topic of problem.primary_topics) {
-      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
-        totalPrimaryTopicRating +=
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
-      }
-    }
-    const weightedAveragePrimaryTopicRating: number =
-      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length) ||
-        totalPrimaryTopicRating === 0 ?
-        0.3 * userEloRating : 0.3 * (totalPrimaryTopicRating / problem.primary_topics.length)
-
-    let totalSecondaryTopicRating: number = 0
-    for (const topic of problem.secondary_topics) {
-      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
-        totalSecondaryTopicRating +=
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
-      }
-    }
-    const weightedAverageSecondaryTopicRating: number =
-      Number.isNaN(totalSecondaryTopicRating / problem.secondary_topics.length) ||
-        totalSecondaryTopicRating === 0 ?
-        0.2 * userEloRating : 0.2 * (totalSecondaryTopicRating / problem.secondary_topics.length)
-
-    effectiveUserRating += weightedAveragePrimaryTopicRating + weightedAverageSecondaryTopicRating
-
-    effectiveUserRating = Math.floor(effectiveUserRating)
-
-
-    console.log("Effective User Rating: ", effectiveUserRating)
-    const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
-
-    console.log("Expected user performance: ", expectedUserPerformance)
-
-    const ratingChange = services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
+    const ratingChange = this.calculateRatingChange(problem, userEloRating, userId, userScores, finalApproachScore, edgeCaseScore, numberOfAttempts)
 
     console.log("Rating Change: ", ratingChange)
     if (Number.isNaN(ratingChange)) {
@@ -204,36 +172,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
       throw new InternalServerError('Failed to add submission to database', e)
     }
 
-    let userSubmissionsData: { approach_score: number, submitted_at: string, difficulty: string, edge_case_score: number, problem_id: string }[] | []
-
-    try {
-      userSubmissionsData = await this.submissionDAO.viewScoresByUser(userId)
-    }
-    catch (e) {
-      throw new InternalServerError('Failed to fetch user submissions from the database', e)
-    }
-
-    let weightedScore = 0;
-    let totalWeight = 0;
-    let weightedEdgeScore = 0
-
-    for (const submission of userSubmissionsData) {
-      const weight = services.weights.problemDifficultyWeights[submission.difficulty as keyof typeof services.weights.problemDifficultyWeights];
-
-      weightedEdgeScore += submission.edge_case_score * weight
-      weightedScore += submission.approach_score * weight;
-      totalWeight += weight;
-    }
-
-    let mergedApproachScore = Number.isNaN(weightedScore / totalWeight) ? 0 : Math.round(weightedScore / totalWeight);
-    let mergedEdgeCaseScore = Number.isNaN(weightedEdgeScore / totalWeight) ? 0 : Math.round(weightedEdgeScore / totalWeight);
-
-    let totalScore = services.weights.totalScoreWeights.approach_score * mergedApproachScore
-      + services.weights.totalScoreWeights.edge_case_score * mergedEdgeCaseScore
-
-    if (userScores !== undefined && userScores !== null && Number.isFinite(userScores.consistency_score)) {
-      totalScore += services.weights.totalScoreWeights.consistency_score * userScores?.consistency_score
-    }
     console.log('Final User Scores: ', {
       approaches_score: mergedApproachScore,
       edge_case_score: mergedEdgeCaseScore,
@@ -241,8 +179,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
       elo_rating: userEloRating + ratingChange,
       topic_ratings: topicRatingsChange
     })
-
-
 
     let updatedUserScores: UserScores
     try {
@@ -260,12 +196,129 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
 
     last5submissions = last5submissions && Array.isArray(last5submissions) ? last5submissions : []
+
+    const newestToOldest = this.buildNewLast5Submissions(submissionData, last5submissions)
+
+    let updatedShortSubmissions: ShortSubmission[]
+    try {
+      updatedShortSubmissions = await this.userDAO.setSubmissionsInProfile(userId, newestToOldest)
+    }
+    catch (e) {
+      throw new InternalServerError('Unable to store new Submission Data to Database.')
+    }
+
+    return submissionData
+  }
+
+  calculateRatingChange(problem: Problem, userEloRating: number, userId: string, userScores: UserScores, finalApproachScore: number, edgeCaseScore: number, numberOfAttempts: number) {
+
+    const userPerformance: number = 0.55 * (finalApproachScore / 100) +
+      0.25 * (edgeCaseScore / 100) +
+      0.20 * (services.weights.problemDifficultyWeights[problem.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
+
+    console.log("User Performance: ", userPerformance)
+
+    let effectiveUserRating: number = 0.5 * userEloRating
+
+    let totalPrimaryTopicRating: number = 0
+    for (const topic of problem.primary_topics) {
+      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
+        totalPrimaryTopicRating +=
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
+      }
+    }
+    const weightedAveragePrimaryTopicRating: number =
+      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length) ||
+        totalPrimaryTopicRating === 0 ?
+        0.3 * userEloRating : 0.3 * (totalPrimaryTopicRating / problem.primary_topics.length)
+
+    let totalSecondaryTopicRating: number = 0
+    for (const topic of problem.secondary_topics) {
+      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
+        totalSecondaryTopicRating +=
+          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings]
+      }
+    }
+    const weightedAverageSecondaryTopicRating: number =
+      Number.isNaN(totalSecondaryTopicRating / problem.secondary_topics.length) ||
+        totalSecondaryTopicRating === 0 ?
+        0.2 * userEloRating : 0.2 * (totalSecondaryTopicRating / problem.secondary_topics.length)
+
+    effectiveUserRating += weightedAveragePrimaryTopicRating + weightedAverageSecondaryTopicRating
+
+    effectiveUserRating = Math.floor(effectiveUserRating)
+
+
+    console.log("Effective User Rating: ", effectiveUserRating)
+    const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
+
+    console.log("Expected user performance: ", expectedUserPerformance)
+
+    let numberOfAttemptsModifier = 1
+    if (numberOfAttempts >= services.weights.numberOfAttemptsModifier.maxNumber) {
+      numberOfAttemptsModifier = services.weights.numberOfAttemptsModifier.maxValue
+    }
+    else {
+      numberOfAttemptsModifier = services.weights.numberOfAttemptsModifier[numberOfAttempts as keyof typeof services.weights.numberOfAttemptsModifier]
+    }
+
+    console.log("Attempt based modifier: ", numberOfAttemptsModifier)
+
+    const ratingChange = numberOfAttemptsModifier * services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
+    return ratingChange
+  }
+
+  async calculateNewUserScores(userId: string, userScores: UserScores, problemId: string, newApproachScore: number, newEdgeCaseScore: number, problemDifficulty: string) {
+    let userSubmissionsData: { approach_score: number, submitted_at: string, difficulty: string, edge_case_score: number, problem_id: string }[] | []
+
+    try {
+      userSubmissionsData = await this.submissionDAO.viewScoresByUser(userId)
+    }
+    catch (e) {
+      throw new InternalServerError('Failed to fetch user submissions from the database', e)
+    }
+
+    let weightedScore = 0;
+    let totalWeight = 0;
+    let weightedEdgeScore = 0
+    let numberOfAttempts = 0
+
+    for (const submission of userSubmissionsData) {
+      if (submission.problem_id === problemId) {
+        numberOfAttempts++
+      }
+
+      const weight = services.weights.problemDifficultyWeights[submission.difficulty as keyof typeof services.weights.problemDifficultyWeights];
+
+      weightedEdgeScore += submission.edge_case_score * weight
+      weightedScore += submission.approach_score * weight;
+      totalWeight += weight;
+    }
+
+    const weight = services.weights.problemDifficultyWeights[problemDifficulty as keyof typeof services.weights.problemDifficultyWeights]
+    weightedScore += newApproachScore * weight
+    weightedEdgeScore += newEdgeCaseScore * weight
+    totalWeight += weight
+
+    let mergedApproachScore = Number.isNaN(weightedScore / totalWeight) ? 0 : Math.round(weightedScore / totalWeight);
+    let mergedEdgeCaseScore = Number.isNaN(weightedEdgeScore / totalWeight) ? 0 : Math.round(weightedEdgeScore / totalWeight);
+
+    let totalScore = services.weights.totalScoreWeights.approach_score * mergedApproachScore
+      + services.weights.totalScoreWeights.edge_case_score * mergedEdgeCaseScore
+
+    if (userScores !== undefined && userScores !== null && Number.isFinite(userScores.consistency_score)) {
+      totalScore += services.weights.totalScoreWeights.consistency_score * userScores?.consistency_score
+    }
+    return { mergedApproachScore, mergedEdgeCaseScore, totalScore, numberOfAttempts }
+  }
+
+  buildNewLast5Submissions(submissionData: Submission, last5submissions: ShortSubmission[]) {
+
     let newestToOldest = [...last5submissions].sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
 
     while (newestToOldest.length > 4) {
       newestToOldest.pop()
     }
-
 
     let newShortSubmission = new ShortSubmission()
 
@@ -281,16 +334,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     newestToOldest.unshift(newShortSubmission)
 
-    let updatedShortSubmissions: ShortSubmission[]
-    try {
-      updatedShortSubmissions = await this.userDAO.setSubmissionsInProfile(userId, newestToOldest)
-    }
-    catch (e) {
-      throw new InternalServerError('Unable to store new Submission Data to Database.')
-    }
-
-
-
-    return submissionData
+    return newestToOldest
   }
 }

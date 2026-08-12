@@ -32,13 +32,17 @@ type SubmissionRow = QueryResultRow & {
   edge_cases: unknown;
   edge_case_score: number | string | null;
   submitted_at: string | Date | null;
-  elo_dif: number | string | null;
+  elo_diff: number | string | null;
 };
 
 type SubmissionScoreRow = QueryResultRow & Pick<
   SubmissionRow,
   "problem_id" | "difficulty" | "approach_score" | "edge_case_score" | "submitted_at"
 >;
+
+type SubmissionCountRow = QueryResultRow & {
+  count: number | string;
+};
 
 function buildSubmissionRow(overrides: Partial<SubmissionRow> = {}): SubmissionRow {
   return {
@@ -57,7 +61,7 @@ function buildSubmissionRow(overrides: Partial<SubmissionRow> = {}): SubmissionR
     edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
     edge_case_score: 8,
     submitted_at: "2026-01-01T00:00:00.000Z",
-    elo_dif: 17.5,
+    elo_diff: 17.5,
     ...overrides,
   };
 }
@@ -79,7 +83,7 @@ function buildSubmission(overrides: Partial<Submission> = {}): Submission {
     edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
     edge_case_score: 8,
     submitted_at: "2026-01-01T00:00:00.000Z",
-    elo_dif: 17.5,
+    elo_diff: 17.5,
     ...overrides,
   });
 }
@@ -114,7 +118,7 @@ describe("SubmissionDAO unit", () => {
       edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
       edge_case_score: 8,
       submitted_at: "2026-01-01T00:00:00.000Z",
-      elo_dif: 17.5,
+      elo_diff: 17.5,
     };
     const persistedRow = buildSubmissionRow();
 
@@ -154,7 +158,7 @@ describe("SubmissionDAO unit", () => {
       payload.edge_cases,
       payload.edge_case_score,
       payload.submitted_at,
-      payload.elo_dif,
+      payload.elo_diff,
     ]);
     expect(result).toEqual(buildSubmission());
   });
@@ -212,6 +216,33 @@ describe("SubmissionDAO unit", () => {
     ]);
   });
 
+  it("counts submissions for a user/problem pair and falls back to zero when nothing matches", async () => {
+    const countRows: SubmissionCountRow[] = [{ count: 3 }];
+
+    query
+      .mockResolvedValueOnce({
+        rows: countRows,
+        rowCount: countRows.length,
+      } as never)
+      .mockResolvedValueOnce({
+        rows: [],
+        rowCount: 0,
+      } as never);
+
+    await expect(submissionDAO.viewNumberOfSubmissionsPerUserPerProblem("user-123", "problem-123")).resolves.toBe(3);
+    await expect(submissionDAO.viewNumberOfSubmissionsPerUserPerProblem("user-123", "missing-problem")).resolves.toBe(0);
+
+    expect(query).toHaveBeenNthCalledWith(
+      1,
+      expect.stringContaining("COUNT(*)::int AS count"),
+      ["user-123", "problem-123"],
+    );
+    expect(query).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining("COUNT(*)::int AS count"),
+      ["user-123", "missing-problem"],
+    );
+  });
   it("returns null when no submission exists for an id", async () => {
     query.mockResolvedValueOnce({
       rows: [],
@@ -293,7 +324,7 @@ describe("SubmissionDAO unit", () => {
         edge_cases: [{ description: "edge-1", importance: "high", coverage: "partial" }],
         edge_case_score: 8,
         submitted_at: "2026-01-01T00:00:00.000Z",
-        elo_dif: 17.5,
+        elo_diff: 17.5,
       }),
     ).rejects.toThrow("Submission creation data didn't persist in the database");
   });

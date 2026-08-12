@@ -7,7 +7,7 @@ let problem =
 {
   "problem_slug": "remove-letter-to-equalize-frequency",
   "primary_topics": [
-    "hash-table"
+    "hashTable"
   ],
   "secondary_topics": [
     "string",
@@ -122,6 +122,10 @@ let problem =
     "Edge Cases: Check words with one distinct letter, already-uniform counts, and one outlier frequency.",
     "Missed Points: Check whether the answer forgets that removing a letter can eliminate that character entirely from the remaining set.",
     "Overall Understanding: Judge whether the reasoning identifies the limited ways one deletion can make all present frequencies equal."
+  ],
+  "similar_problems": [
+    "maximum-equal-frequency",
+    "minimum-deletions-to-make-character-frequencies-unique"
   ]
 }
 
@@ -137,7 +141,7 @@ for (const obj of contentData) {
   }
 }
 
-console.log(problem)
+console.log(JSON.stringify(problem))
 
 var req = unirest('POST', 'https://localhost:3000/admin/problem/create')
   .headers({

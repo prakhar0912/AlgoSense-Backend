@@ -43,6 +43,10 @@ type SubmissionScoreRow = QueryResultRow & {
   submitted_at: string | Date | null;
 };
 
+type SubmissionCountRow = QueryResultRow & {
+  count: number | string;
+};
+
 const SUBMISSION_COLUMNS = [
   "id",
   "user_id",
@@ -377,5 +381,23 @@ export default class SubmissionDAO implements ISubmissionDAO {
     );
 
     return result.rows.map((row) => normalizeSubmissionScoreRow(row));
+  }
+  async viewNumberOfSubmissionsPerUserPerProblem(userId: string, problemId: string): Promise<number> { // Count rows for a specific user/problem pair.
+    const result = await this.db.query<SubmissionCountRow>(
+      `
+        SELECT COUNT(*)::int AS count
+        FROM submissions
+        WHERE user_id = $1
+          AND problem_id = $2
+      `,
+      [userId, problemId],
+    );
+
+    const countRow = result.rows[0];
+    if (!countRow) {
+      return 0;
+    }
+
+    return toFiniteNumber(countRow.count);
   }
 }

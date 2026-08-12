@@ -2,20 +2,41 @@ import type Problem from "../entities/problem.js";
 import { InternalServerError, ValidationError } from "../errors/index.js";
 import type IPaginated from "../interfaces/paginated.js";
 import type IRequest from "../interfaces/request.js";
-import type IUseCase from "../interfaces/useCase.js";
 import type IValidator from "../interfaces/validator.js";
+import type { ListProblemsForUser, GetProblemByIdForUser, GetProblemBySlugForUser } from "../use-cases/user/index.js";
+import type { GetProblemBySlugForAdmin, GetProblemByIdForAdmin, ListProblemsForAdmin, CreateProblem, DeleteProblem, UpdateProblem } from "../use-cases/admin/index.js"
+import type { Approach } from "../entities/approach.js";
+
+
+type OptionalWithUndefined<T> = {
+  [K in keyof T]?: T[K] | undefined
+}
+type UpdateProblemPayload =
+  Omit<Partial<Problem>, "approaches" | "id">
+  & {
+    approaches?: Partial<OptionalWithUndefined<Approach>[] | []>;
+  };
+
 
 export default class ProblemController {
   constructor(
 
-    protected listProblems: IUseCase<IPaginated<Problem>>,
-    protected getProblem: IUseCase<Problem>,
-    protected createProblem: IUseCase<Problem>,
-    protected deleteProblem: IUseCase<boolean>,
+    protected listProblemsForAdmin: ListProblemsForAdmin,
+    protected listProblemsForUser: ListProblemsForUser,
+    protected getProblemByIdForUser: GetProblemByIdForUser,
+    protected getProblemByIdForAdmin: GetProblemByIdForAdmin,
+    protected getProblemBySlugForUser: GetProblemBySlugForUser,
+    protected getProblemBySlugForAdmin: GetProblemBySlugForAdmin,
+    protected createProblem: CreateProblem,
+    protected deleteProblem: DeleteProblem,
+    protected updateProblem: UpdateProblem,
+
+
     // protected updateProblem: IUseCase<Problem>,
 
     protected addProblemDataTypeValidator: IValidator<Omit<Problem, 'id'>>,
-    // protected updateProblemDataTypeValidator: IValidator<Problem>,
+    protected updateProblemDataTypeValidator: IValidator<OptionalWithUndefined<UpdateProblemPayload>>,
+    protected filterProblemDataTypeValidator: IValidator<OptionalWithUndefined<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>>>
   ) { }
 
 
@@ -37,18 +58,69 @@ export default class ProblemController {
   //Helper Functions Above
 
 
-  async getPaginatedProblems(request: IRequest): Promise<IPaginated<Problem>> {
+  async getPaginatedProblemsForAdmin(request: IRequest): Promise<IPaginated<Problem>> {
+    let validationResult
+    try {
+      validationResult = this.updateProblemDataTypeValidator.validate(request.body as OptionalWithUndefined<UpdateProblemPayload>)
+    } catch (e) {
+      throw new InternalServerError('User Filter Data Validation Function Failed', e)
+    }
+    if (!validationResult.success || validationResult.errors) {
+      throw new ValidationError('Invalid User Filter Data', validationResult.errors)
+    }
+
     const { page, perPage } = this.validatePaginationParams(request.params);
-    return await this.listProblems.call(page, perPage)
+    return await this.listProblemsForAdmin.call(validationResult.data, page, perPage)
   }
 
-  async getProblemById(request: IRequest): Promise<Problem> {
+  async getPaginatedProblemsForUser(request: IRequest): Promise<IPaginated<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>>> {
+    let validationResult
+    try {
+      validationResult = this.filterProblemDataTypeValidator.validate(request.body as Partial<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>>)
+    } catch (e) {
+      throw new InternalServerError('User Filter Data Validation Function Failed', e)
+    }
+    if (!validationResult.success || validationResult.errors) {
+      throw new ValidationError('Invalid User Filter Data', validationResult.errors)
+    }
+
+    const { page, perPage } = this.validatePaginationParams(request.params);
+    return await this.listProblemsForUser.call(validationResult.data, page, perPage)
+  }
+
+  async getProblemByIdAdmin(request: IRequest): Promise<Problem> {
     const problemId = request.params?.id
     if (!problemId || typeof problemId !== "string") {
       throw new ValidationError('Problem Id is required')
     }
 
-    return await this.getProblem.call(problemId)
+    return await this.getProblemByIdForAdmin.call(problemId)
+  }
+
+  async getProblemByIdUser(request: IRequest): Promise<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>> {
+    const problemId = request.params?.id
+    if (!problemId || typeof problemId !== "string") {
+      throw new ValidationError('Problem Id is required')
+    }
+
+    return await this.getProblemByIdForUser.call(problemId)
+  }
+
+  async getProblemBySlugAdmin(request: IRequest): Promise<Problem> {
+    const problemSlug = request.params?.id
+    if (!problemSlug || typeof problemSlug !== "string") {
+      throw new ValidationError('Problem Id is required')
+    }
+
+    return await this.getProblemBySlugForAdmin.call(problemSlug)
+  }
+
+  async getProblemBySlugUser(request: IRequest): Promise<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>> {
+    const problemSlug = request.params?.id
+    if (!problemSlug || typeof problemSlug !== "string") {
+      throw new ValidationError('Problem Id is required')
+    }
+    return await this.getProblemBySlugForUser.call(problemSlug)
   }
 
   async addProblem(request: IRequest): Promise<Problem> {
@@ -81,24 +153,23 @@ export default class ProblemController {
     return problem
   }
 
-  // async updateProblemById(request: IRequest): Promise<Problem> {
-  //
-  //   let validationResult
-  //   try {
-  //     validationResult = this.updateProblemDataTypeValidator.validate(request.body as Partial<Problem>)
-  //   } catch (e) {
-  //     throw new InternalServerError('Problem Data Validation Function Failed', e)
-  //   }
-  //   if (!validationResult.success || !validationResult.data || validationResult.errors) {
-  //     throw new ValidationError('Invalid Problem Data', validationResult.errors)
-  //   }
-  //   const problemId = request.params?.id
-  //   if (!problemId || typeof problemId !== "string") {
-  //     throw new ValidationError('Problem ID is required')
-  //   }
-  //
-  //   const users = await this.updateProblem.call(problemId, validationResult.data)
-  //   return users
-  //
-  // }
+  async updateProblemById(request: IRequest): Promise<Problem> {
+    let validationResult
+    try {
+      validationResult = this.updateProblemDataTypeValidator.validate(request.body as OptionalWithUndefined<UpdateProblemPayload>)
+    } catch (e) {
+      throw new InternalServerError('Problem Data Validation Function Failed', e)
+    }
+    if (!validationResult.success || !validationResult.data || validationResult.errors) {
+      throw new ValidationError('Invalid Problem Data', validationResult.errors)
+    }
+    const problemId = request.params?.id
+    if (!problemId || typeof problemId !== "string") {
+      throw new ValidationError('Problem ID is required')
+    }
+
+    const users = await this.updateProblem.call(problemId, validationResult.data)
+    return users
+
+  }
 }
