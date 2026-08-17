@@ -4,8 +4,8 @@ import cors from 'cors'
 import methodOverride from 'method-override'
 import routes from './routes/index.js'
 import type IError from '../../../interfaces/error.js'
-import { auth } from 'express-oauth2-jwt-bearer'
 
+import auth from '../../utils/auth/auth0/auth.js'
 import services from '../../../config/services.js'
 import UserController from '../../../controllers/user.js'
 import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../use-cases/user/index.js'
@@ -37,11 +37,7 @@ const app: express.Application = express()
 
 app.use(logger('dev'))
 
-app.use(auth({
-  audience: 'https://algosense.com',
-  issuerBaseURL: 'https://dev-nk1w7ynwpkhbqmew.us.auth0.com/',
-  tokenSigningAlg: 'RS256',
-}))
+app.use(auth)
 
 app.use(async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   try {

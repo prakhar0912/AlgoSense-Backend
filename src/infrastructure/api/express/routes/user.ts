@@ -2,6 +2,7 @@ import express from 'express'
 import type { NextFunction, Request, Response } from 'express'
 import services from '../../../../config/services.js'
 import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../../use-cases/user/index.js'
+import checkPermission from '../../../utils/auth/auth0/authorization.js'
 
 import UserController from '../../../../controllers/user.js'
 import UnauthorizedError from '../../../../errors/unauthorizedError.js'
@@ -32,12 +33,13 @@ const userController = new UserController(
 const router = express.Router()
 
 
-router.get('/profile', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/profile', checkPermission([services.permissions.user.viewSelf]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.payload.sub
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
+
 
     const result = await userController.getProfile({ userId })
     res.send(result)
@@ -46,7 +48,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
   }
 })
 
-router.get('/submissions', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/submissions', checkPermission([services.permissions.user.viewSelfSubmission]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.payload.sub
 
@@ -62,7 +64,7 @@ router.get('/submissions', async (req: Request, res: Response, next: NextFunctio
 })
 
 
-router.post('/submitSolution', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/submitSolution', checkPermission([services.permissions.user.createSubmission]), async (req: Request, res: Response, next: NextFunction) => {
   try {
 
     const userId = req.auth?.payload.sub
@@ -79,7 +81,7 @@ router.post('/submitSolution', async (req: Request, res: Response, next: NextFun
 })
 
 
-router.delete('/delete', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/delete', checkPermission([services.permissions.user.deleteSelf]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.payload.sub
     if (userId === undefined) {
