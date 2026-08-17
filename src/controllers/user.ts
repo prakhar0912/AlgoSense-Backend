@@ -72,6 +72,7 @@ export default class UserController {
       last_name?: string,
       created_at: string,
       email_verified: boolean,
+      role: "user" | "admin",
       email_notifications_enabled?: boolean
     }
 
@@ -99,6 +100,10 @@ export default class UserController {
 
     if (!body.created_at || typeof body.created_at !== "string") {
       throw new ValidationError('created_at should be a string')
+    }
+
+    if (!body.role || typeof body.role !== "string") {
+      throw new ValidationError('role should be a string')
     }
 
     if (typeof body.email_verified !== "boolean") {

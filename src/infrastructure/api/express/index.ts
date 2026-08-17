@@ -21,7 +21,7 @@ const userController = new UserController(
   new FindUserbyId(userDAO),
   new DeleteUser(userDAO),
   new SubmitSolution(userDAO, problemDAO, submissionDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
-  new UpdateConsistencyScore(userDAO, services.utils.getConsistencyScore),
+  new UpdateConsistencyScore(userDAO),
   new UpdateUserScore(userDAO),
   new UpdateUserProfile(userDAO, services.user.validators.updateUser),
   new RegisterUser(userDAO, services.user.validators.registerValidator),
@@ -60,6 +60,7 @@ app.use(async (req: express.Request, res: express.Response, next: express.NextFu
           first_name: userPayload['https://algosense.com/name'],
           created_at: new Date().toISOString(),
           email_verified: (userPayload['https://algosense.com/email_verified'] === 'true'),
+          role: Array.isArray(userPayload['https://algosense.com/roles']) && userPayload['https://algosense.com/roles'].includes("algosense-admin") ? "admin" : "user",
           email_notifications_enabled: true,
           scores: {
             initial_elo_rating: 1500,

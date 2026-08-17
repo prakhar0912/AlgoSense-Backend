@@ -7,6 +7,7 @@ import User from '../../entities/user.js'
 import UserScores from '../../entities/userScores.js'
 import type IPaginated from '../../interfaces/paginated.js'
 import type IUserDAO from '../../interfaces/user/userDAO.js'
+import services from '../../config/services.js'
 
 type DbClient = Pick<PoolClient, 'query'>
 
@@ -297,7 +298,9 @@ function normalizeScores(value: unknown): UserScores {
   scores.edge_case_score = toFiniteNumber(raw.edge_case_score)
   scores.days_logged_in = toIsoStringArray(raw.days_logged_in)
   scores.total_score = raw.total_score === undefined || raw.total_score === null
-    ? scores.approaches_score + scores.consistency_score + scores.edge_case_score
+    ? (services.weights.totalScoreWeights.approach_score * scores.approaches_score) + scores.consistency_score +
+    (services.weights.totalScoreWeights.edge_case_score * scores.edge_case_score) +
+    (services.weights.totalScoreWeights.consistency_score * scores.consistency_score)
     : toFiniteNumber(raw.total_score)
 
   return scores

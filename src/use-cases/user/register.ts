@@ -12,6 +12,7 @@ type UserCreationPayload = {
   first_name?: string | undefined,
   last_name?: string | undefined,
   created_at: string,
+  role: "admin" | "user",
   email_verified: boolean,
   email_notifications_enabled?: boolean | undefined
 }
@@ -35,7 +36,7 @@ export default class RegisterUser implements IUseCase<User> {
 
 
 
-    const { id, email, first_name, last_name, created_at, email_verified, email_notifications_enabled } = validationResult.data
+    const { id, email, first_name, last_name, role, created_at, email_verified, email_notifications_enabled } = validationResult.data
 
 
     let newUser: User
@@ -44,9 +45,9 @@ export default class RegisterUser implements IUseCase<User> {
         id,
         email,
         first_name: first_name ? first_name : "Johney",
-        last_name: last_name ? last_name : "Doey",
+        last_name: last_name ? last_name : "",
         email_notifications_enabled: email_notifications_enabled ? email_notifications_enabled : true,
-        role: 'user',
+        role,
         banned: false,
         created_at,
         email_verified,

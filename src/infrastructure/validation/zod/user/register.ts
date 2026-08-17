@@ -6,6 +6,7 @@ import z from 'zod'
 
 const registerValidator = z.object({
   id: z.string().trim().min(1, 'id should be provided').max(50, "Must be less than 50 characters").transform((val) => sanitize(val)),
+  role: z.enum(["admin", "user"]),
   first_name: z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)).optional(), // Use sanitizedHtmlSchem
   last_name: z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)).optional(),
   email: z.email('Invalid email address').max(100, "Must be less than 100 characters").trim().transform((val) => sanitize(val)),
