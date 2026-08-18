@@ -6,9 +6,6 @@ import { GetProblemByIdForAdmin, GetProblemBySlugForAdmin, ListProblemsForAdmin,
 import { GetProblemByIdForUser, GetProblemBySlugForUser, ListProblemsForUser } from '../../../../use-cases/user/index.js'
 import ProblemController from '../../../../controllers/problem.js'
 import { UnauthorizedError } from 'express-oauth2-jwt-bearer'
-import checkPermission from '../../../utils/auth/auth0/authorization.js'
-import UserController from '../../../../controllers/user.js'
-import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../../use-cases/user/index.js'
 
 import { userRegistration, newLogin } from '../userRegistration.js'
 
@@ -55,7 +52,7 @@ const router = express.Router()
 router.use(userRegistration)
 router.use(newLogin)
 
-router.get('/all', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/all', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -73,7 +70,7 @@ router.get('/all', checkPermission([services.permissions.user.viewPartialProblem
 })
 
 
-router.get('/byId/:id', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/byId/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -91,7 +88,7 @@ router.get('/byId/:id', checkPermission([services.permissions.user.viewPartialPr
   }
 })
 
-router.get('/bySlug/:slug', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/bySlug/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {

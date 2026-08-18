@@ -59,10 +59,7 @@ const problemController = new ProblemController(
 
 const router = express.Router()
 
-router.use(userRegistration)
-router.use(newLogin)
-
-router.get('/problems', checkPermission([services.permissions.admin.viewProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/problems', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (typeof req.body === 'undefined') {
@@ -80,7 +77,7 @@ router.get('/problems', checkPermission([services.permissions.admin.viewProblem]
 })
 
 
-router.get('/problem/:id', checkPermission([services.permissions.admin.viewProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/problem/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -98,7 +95,7 @@ router.get('/problem/:id', checkPermission([services.permissions.admin.viewProbl
   }
 })
 
-router.get('/problem/slug/:slug', checkPermission([services.permissions.admin.viewProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/problem/slug/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -116,8 +113,8 @@ router.get('/problem/slug/:slug', checkPermission([services.permissions.admin.vi
   }
 })
 
-router.post('/problem/create', checkPermission([services.permissions.admin.createProblem]), async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.auth?.clientId
+router.post('/problem/create', async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.auth?.payload.sub
   if (userId === undefined) {
     throw new UnauthorizedError('User ID is required')
   }
@@ -125,7 +122,7 @@ router.post('/problem/create', checkPermission([services.permissions.admin.creat
   res.send(result)
 })
 
-router.delete('/problem/:id', checkPermission([services.permissions.admin.deleteProblem]), async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/problem/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -143,8 +140,8 @@ router.delete('/problem/:id', checkPermission([services.permissions.admin.delete
 })
 
 
-router.get('/users', checkPermission([services.permissions.admin.viewUser]), async (req: Request, res: Response, next: NextFunction) => {
-  const userId = req.auth?.clientId
+router.get('/users', async (req: Request, res: Response, next: NextFunction) => {
+  const userId = req.auth?.payload.sub
   if (userId === undefined) {
     throw new UnauthorizedError('User ID is required')
   }
@@ -153,7 +150,7 @@ router.get('/users', checkPermission([services.permissions.admin.viewUser]), asy
   res.send(result)
 })
 
-router.put('/users/:id', checkPermission([services.permissions.admin.updateUser]), async (req: Request, res: Response, next: NextFunction) => {
+router.put('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -171,7 +168,7 @@ router.put('/users/:id', checkPermission([services.permissions.admin.updateUser]
   }
 })
 
-router.delete('/users/:id', checkPermission([services.permissions.admin.deleteUser]), async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/users/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {

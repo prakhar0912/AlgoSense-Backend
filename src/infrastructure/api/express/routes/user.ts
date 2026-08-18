@@ -2,7 +2,6 @@ import express from 'express'
 import type { NextFunction, Request, Response } from 'express'
 import services from '../../../../config/services.js'
 import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../../use-cases/user/index.js'
-import checkPermission from '../../../utils/auth/auth0/authorization.js'
 
 import UserController from '../../../../controllers/user.js'
 import UnauthorizedError from '../../../../errors/unauthorizedError.js'
@@ -36,7 +35,7 @@ const router = express.Router()
 router.use(userRegistration)
 router.use(newLogin)
 
-router.get('/profile', checkPermission([services.permissions.user.viewSelf]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/profile', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {
@@ -50,7 +49,7 @@ router.get('/profile', checkPermission([services.permissions.user.viewSelf]), as
   }
 })
 
-router.get('/submissions', checkPermission([services.permissions.user.viewSelfSubmission]), async (req: Request, res: Response, next: NextFunction) => {
+router.get('/submissions', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
 
@@ -66,7 +65,7 @@ router.get('/submissions', checkPermission([services.permissions.user.viewSelfSu
 })
 
 
-router.post('/submitSolution', checkPermission([services.permissions.user.createSubmission]), async (req: Request, res: Response, next: NextFunction) => {
+router.post('/submitSolution', async (req: Request, res: Response, next: NextFunction) => {
   try {
 
     const userId = req.auth?.clientId
@@ -82,7 +81,7 @@ router.post('/submitSolution', checkPermission([services.permissions.user.create
 })
 
 
-router.delete('/delete', checkPermission([services.permissions.user.deleteSelf]), async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/delete', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.auth?.clientId
     if (userId === undefined) {

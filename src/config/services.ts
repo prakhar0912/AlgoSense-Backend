@@ -23,34 +23,6 @@ export default {
     askGPT,
     getConsistencyScore
   },
-  permissions: {
-    user: {
-      createSubmission: "create:submission",
-      deleteSelf: "delete:self",
-      updateSelf: "update:self",
-      viewPartialProblem: "view:partial-problem",
-      viewSelf: "view:self",
-      viewSelfSubmission: "view:self-submission",
-    },
-    admin: {
-      createSubmission: "create:submission",
-      deleteSelf: "delete:self",
-      updateSelf: "update:self",
-      viewPartialProblem: "view:partial-problem",
-      viewSelf: "view:self",
-      viewSelfSubmission: "view:self-submission",
-      createProblem: "create:problem",
-      deleteProblem: "delete:problem",
-      viewProblem: "view:problem",
-      updateProblem: "update:problem",
-      viewUser: "view:user",
-      deleteUser: "delete:user",
-      updateUser: "update:user",
-      viewSubmission: "view:submission",
-      deleteSubmission: "delete:submission",
-      updateSubmission: "update:submission"
-    },
-  },
   weights: {
     elo_k_weight: 24,
     numberOfAttemptsModifier: {
