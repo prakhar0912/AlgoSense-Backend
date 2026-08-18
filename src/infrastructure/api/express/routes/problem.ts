@@ -7,12 +7,14 @@ import { GetProblemByIdForUser, GetProblemBySlugForUser, ListProblemsForUser } f
 import ProblemController from '../../../../controllers/problem.js'
 import { UnauthorizedError } from 'express-oauth2-jwt-bearer'
 import checkPermission from '../../../utils/auth/auth0/authorization.js'
+import UserController from '../../../../controllers/user.js'
+import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../../use-cases/user/index.js'
 
+import { userRegistration, newLogin } from '../userRegistration.js'
 
-
-
+const userDAO = new services.user.DAO()
 const problemDAO = new services.problem.DAO()
-
+const submissionDAO = new services.submission.DAO()
 
 
 const problemController = new ProblemController(
@@ -31,13 +33,31 @@ const problemController = new ProblemController(
   services.problem.validators.filterProblemsForUser
 )
 
+
+
+
+const userController = new UserController(
+  new FindUserbyId(userDAO),
+  new DeleteUser(userDAO),
+  new SubmitSolution(userDAO, problemDAO, submissionDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
+  new UpdateConsistencyScore(userDAO),
+  new UpdateUserScore(userDAO),
+  new UpdateUserProfile(userDAO, services.user.validators.updateUser),
+  new RegisterUser(userDAO, services.user.validators.registerValidator),
+  new GetSubmissionsById(submissionDAO),
+
+  services.user.validators.updateUser
+)
+
 const router = express.Router()
 
 
+router.use(userRegistration)
+router.use(newLogin)
 
 router.get('/all', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.payload.sub
+    const userId = req.auth?.clientId
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -55,7 +75,7 @@ router.get('/all', checkPermission([services.permissions.user.viewPartialProblem
 
 router.get('/byId/:id', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.payload.sub
+    const userId = req.auth?.clientId
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -73,7 +93,7 @@ router.get('/byId/:id', checkPermission([services.permissions.user.viewPartialPr
 
 router.get('/bySlug/:slug', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.payload.sub
+    const userId = req.auth?.clientId
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }

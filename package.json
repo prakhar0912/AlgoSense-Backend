@@ -31,6 +31,9 @@
     "unirest": "^0.6.0"
   },
   "dependencies": {
+    "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
     "argon2": "^0.44.0",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",

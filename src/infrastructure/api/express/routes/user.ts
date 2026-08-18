@@ -7,6 +7,7 @@ import checkPermission from '../../../utils/auth/auth0/authorization.js'
 import UserController from '../../../../controllers/user.js'
 import UnauthorizedError from '../../../../errors/unauthorizedError.js'
 
+import { userRegistration, newLogin } from '../userRegistration.js'
 
 
 const userDAO = new services.user.DAO()
@@ -32,14 +33,15 @@ const userController = new UserController(
 
 const router = express.Router()
 
+router.use(userRegistration)
+router.use(newLogin)
 
 router.get('/profile', checkPermission([services.permissions.user.viewSelf]), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.payload.sub
+    const userId = req.auth?.clientId
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
-
 
     const result = await userController.getProfile({ userId })
     res.send(result)
@@ -50,7 +52,7 @@ router.get('/profile', checkPermission([services.permissions.user.viewSelf]), as
 
 router.get('/submissions', checkPermission([services.permissions.user.viewSelfSubmission]), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.payload.sub
+    const userId = req.auth?.clientId
 
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
@@ -67,8 +69,7 @@ router.get('/submissions', checkPermission([services.permissions.user.viewSelfSu
 router.post('/submitSolution', checkPermission([services.permissions.user.createSubmission]), async (req: Request, res: Response, next: NextFunction) => {
   try {
 
-    const userId = req.auth?.payload.sub
-    console.dir(req.auth)
+    const userId = req.auth?.clientId
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -83,7 +84,7 @@ router.post('/submitSolution', checkPermission([services.permissions.user.create
 
 router.delete('/delete', checkPermission([services.permissions.user.deleteSelf]), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.payload.sub
+    const userId = req.auth?.clientId
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
