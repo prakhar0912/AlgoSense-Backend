@@ -1,4 +1,3 @@
-
 import express from 'express'
 import type { NextFunction, Request, Response } from 'express'
 import services from '../../../../config/services.js'
@@ -6,12 +5,12 @@ import { GetProblemByIdForAdmin, GetProblemBySlugForAdmin, ListProblemsForAdmin,
 import { GetProblemByIdForUser, GetProblemBySlugForUser, ListProblemsForUser } from '../../../../use-cases/user/index.js'
 import ProblemController from '../../../../controllers/problem.js'
 import { UnauthorizedError } from 'express-oauth2-jwt-bearer'
+import type { AuthResult } from 'express-oauth2-jwt-bearer'
+type JwtRequest = Omit<Request, 'auth'> & {
+  auth?: AuthResult
+}
 
-import { userRegistration, newLogin } from '../userRegistration.js'
-
-const userDAO = new services.user.DAO()
 const problemDAO = new services.problem.DAO()
-const submissionDAO = new services.submission.DAO()
 
 
 const problemController = new ProblemController(
@@ -31,30 +30,14 @@ const problemController = new ProblemController(
 )
 
 
-
-
-const userController = new UserController(
-  new FindUserbyId(userDAO),
-  new DeleteUser(userDAO),
-  new SubmitSolution(userDAO, problemDAO, submissionDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
-  new UpdateConsistencyScore(userDAO),
-  new UpdateUserScore(userDAO),
-  new UpdateUserProfile(userDAO, services.user.validators.updateUser),
-  new RegisterUser(userDAO, services.user.validators.registerValidator),
-  new GetSubmissionsById(submissionDAO),
-
-  services.user.validators.updateUser
-)
-
 const router = express.Router()
 
 
-router.use(userRegistration)
-router.use(newLogin)
 
 router.get('/all', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.clientId
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
+
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -72,7 +55,7 @@ router.get('/all', async (req: Request, res: Response, next: NextFunction) => {
 
 router.get('/byId/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.clientId
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -90,7 +73,8 @@ router.get('/byId/:id', async (req: Request, res: Response, next: NextFunction) 
 
 router.get('/bySlug/:slug', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.clientId
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
+
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }

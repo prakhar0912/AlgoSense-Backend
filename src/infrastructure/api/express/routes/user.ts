@@ -2,12 +2,13 @@ import express from 'express'
 import type { NextFunction, Request, Response } from 'express'
 import services from '../../../../config/services.js'
 import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../../use-cases/user/index.js'
-
 import UserController from '../../../../controllers/user.js'
 import UnauthorizedError from '../../../../errors/unauthorizedError.js'
 
-import { userRegistration, newLogin } from '../userRegistration.js'
-
+import type { AuthResult } from 'express-oauth2-jwt-bearer'
+type JwtRequest = Omit<Request, 'auth'> & {
+  auth?: AuthResult
+}
 
 const userDAO = new services.user.DAO()
 const problemDAO = new services.problem.DAO()
@@ -32,12 +33,10 @@ const userController = new UserController(
 
 const router = express.Router()
 
-router.use(userRegistration)
-router.use(newLogin)
 
 router.get('/profile', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.clientId
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -51,8 +50,8 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
 
 router.get('/submissions', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.clientId
 
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -68,7 +67,8 @@ router.get('/submissions', async (req: Request, res: Response, next: NextFunctio
 router.post('/submitSolution', async (req: Request, res: Response, next: NextFunction) => {
   try {
 
-    const userId = req.auth?.clientId
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
+
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
@@ -83,7 +83,8 @@ router.post('/submitSolution', async (req: Request, res: Response, next: NextFun
 
 router.delete('/delete', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.auth?.clientId
+    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
+
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }

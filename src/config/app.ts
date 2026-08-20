@@ -7,9 +7,10 @@ export default {
   env: process.env.NODE_ENV,
   port: process.env.PORT,
   open_router_key: process.env.OPEN_ROUTER_KEY,
-  mcp: {
-    mcpURL: new URL(String(process.env.MCP_URL))
-  },
+  // mcp: {
+  //   mcpURL: new URL(String(process.env.MCP_URL)),
+  //   port: Number(process.env.MCP_PORT)
+  // },
   database: {
     host: String(process.env.PGHOST) as string,
     port: Number(process.env.PGPORT),

@@ -1,39 +1,16 @@
-import UnauthorizedError from '../../../../errors/unauthorizedError.js'
-import type { RequestHandler } from
-  'express'
+import { claimCheck } from "express-oauth2-jwt-bearer";
+import UnauthorizedError from "../../../../errors/unauthorizedError.js";
 
-export default function checkPermission(
-  requiredPermissions: string[],
-): RequestHandler {
-  return (req, res, next) => {
-    const granted = req.auth?.scopes ?? []
+export default function checkPermission(requiredPermissions: string[]) {
+  return claimCheck((claims) => {
+    const required = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
+    const userPermissions = claims.permissions as string[] || [];
 
-    const hasAccess =
-      requiredPermissions.every((permission) =>
-        granted.includes(permission),
-      )
+    const hasAccess = required.every(perm => userPermissions.includes(perm));
 
     if (!hasAccess) {
       throw new UnauthorizedError("You are not authorized to access this route.")
     }
-
-    next()
-  }
+    return true
+  });
 }
-
-
-// export default function checkPermission(requiredPermissions: string[]) {
-//   return claimCheck((claims) => {
-//     // console.log(claims)
-//     console.log('hehehe')
-//     const required = Array.isArray(requiredPermissions) ? requiredPermissions : [requiredPermissions];
-//     const userPermissions = claims.permissions as string[] || [];
-//
-//     const hasAccess = required.every(perm => userPermissions.includes(perm));
-//
-//     if (!hasAccess) {
-//       throw new UnauthorizedError("You are not authorized to access this route.")
-//     }
-//     return true
-//   });
-// }

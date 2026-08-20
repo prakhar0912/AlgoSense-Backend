@@ -6,14 +6,17 @@
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "dev": "tsx watch ./src/server.ts",
-    "build": "ts",
-    "start": "node dist/app.js"
+    "dev-mcp": "tsc && node dist/server.js",
+    "build": "tsc",
+    "start": "node dist/app.js",
+    "inspect": "mcp-inspector --web --transport http --server-url http://localhost:3000/mcp"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "^2.2.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/jest": "^30.0.0",
