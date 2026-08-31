@@ -1,13 +1,11 @@
-import type Problem from "../entities/problem.js";
+import type { Approach, Problem } from "../entities/index.js";
 import { InternalServerError, ValidationError } from "../errors/index.js";
-import type IPaginated from "../interfaces/paginated.js";
-import type IRequest from "../interfaces/request.js";
-import type IValidator from "../interfaces/validator.js";
+import type { IPaginated, IRequest, IValidator } from "../interfaces/index.js";
 import type { ListProblemsForUser, GetProblemByIdForUser, GetProblemBySlugForUser } from "../use-cases/user/index.js";
 import type { GetProblemBySlugForAdmin, GetProblemByIdForAdmin, ListProblemsForAdmin, CreateProblem, DeleteProblem, UpdateProblem } from "../use-cases/admin/index.js"
-import type { Approach } from "../entities/approach.js";
 
 
+// Conforming with Zod for type agreement
 type OptionalWithUndefined<T> = {
   [K in keyof T]?: T[K] | undefined
 }

@@ -1,9 +1,9 @@
-import type User from "../../entities/user.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import NotFoundError from "../../errors/notFoundError.js";
-import ValidationError from "../../errors/validationError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
+import type { User } from "../../entities/index.js";
+import { InternalServerError, NotFoundError, ValidationError } from "../../errors/index.js";
+import type { IUseCase, IUserDAO } from "../../interfaces/index.js";
+
+
+
 
 export default class ToggleBanUser implements IUseCase<User> {
   constructor(

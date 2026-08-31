@@ -1,7 +1,6 @@
-import type UserScores from "../../entities/userScores.js";
+import type { UserScores } from "../../entities/index.js";
 import InternalServerError from "../../errors/internalServerError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
+import type { IUseCase, IUserDAO } from "../../interfaces/index.js";
 
 export default class UpdateUserScore implements IUseCase<Partial<UserScores>> {
   constructor(

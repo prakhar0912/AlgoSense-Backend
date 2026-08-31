@@ -1,5 +1,5 @@
 import { Approach } from "./approach.js"
-export default class Problem {
+export class Problem {
   id!: string
   title!: string
   description!: string

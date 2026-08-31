@@ -1,5 +1,5 @@
 import User from "../../entities/user.js"
 
-export default interface ILoginResponse {
+export interface ILoginResponse {
   user: User
 }

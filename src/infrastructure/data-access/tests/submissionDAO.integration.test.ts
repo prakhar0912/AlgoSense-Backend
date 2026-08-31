@@ -2,9 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
-import Problem from "../../../entities/problem.js";
-import Submission from "../../../entities/submission.js";
-import User from "../../../entities/user.js";
+import { Problem, Submission, User } from "../../../entities/index.js";
 import client, { pool } from "../client.js";
 import ProblemDAO from "../problemDAO.js";
 import SubmissionDAO from "../submissionDAO.js";
@@ -103,10 +101,10 @@ function buildProblemInput(index: number, difficulty: Problem["difficulty"]): Om
       edge_cases: [{
         case: `edge-${index}`,
         importance: "high",
-        coverage: "partial",
       }],
     }],
     evaluation_criteria: [`criterion-${index}`],
+    similar_problems: ['similar-problem']
   };
 }
 

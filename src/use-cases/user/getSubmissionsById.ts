@@ -1,9 +1,6 @@
-import UnauthorizedError from "../../errors/unauthorizedError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import type IPaginated from "../../interfaces/paginated.js";
-import type Submission from "../../entities/submission.js";
-import type ISubmissionDAO from "../../interfaces/submission/submissionDAO.js";
+import { UnauthorizedError, InternalServerError } from "../../errors/index.js";
+import type { IUseCase, IPaginated, ISubmissionDAO } from "../../interfaces/index.js";
+import type { Submission } from "../../entities/index.js";
 
 
 

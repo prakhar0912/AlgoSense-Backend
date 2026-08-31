@@ -1,9 +1,6 @@
-import type User from "../../entities/user.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import ValidationError from "../../errors/validationError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
-import type IValidator from "../../interfaces/validator.js";
+import type { User } from "../../entities/index.js";
+import { InternalServerError, ValidationError } from "../../errors/index.js";
+import type { IUseCase, IUserDAO, IValidator } from "../../interfaces/index.js";
 
 
 type OptionalWithUndefined<T> = {

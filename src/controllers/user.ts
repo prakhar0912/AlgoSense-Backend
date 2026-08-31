@@ -1,22 +1,21 @@
-import type Submission from "../entities/submission.js";
-import type User from "../entities/user.js";
-import type UserScores from "../entities/userScores.js";
-import InternalServerError from "../errors/internalServerError.js";
-import ValidationError from "../errors/validationError.js";
-import type IRequest from "../interfaces/request.js";
-import type IValidator from "../interfaces/validator.js";
+import type { Submission, User, UserScores } from "../entities/index.js";
+import { InternalServerError, ValidationError } from "../errors/index.js";
+import type { IRequest, IValidator, INotifier } from "../interfaces/index.js";
+
+import type {
+  FindUserbyId,
+  DeleteUser,
+  SubmitSolution,
+  UpdateConsistencyScore,
+  UpdateUserScore,
+  UpdateUserProfile,
+  RegisterUser,
+  GetSubmissionsById,
+} from "../use-cases/user/index.js"
+
+
 type profileDataTypes = Pick<User, 'first_name' | 'last_name' | 'email_notifications_enabled'>
-
-
-import type FindUserbyId from "../use-cases/user/findUser.js";
-import type DeleteUser from "../use-cases/user/deleteUser.js";
-import type SubmitSolution from "../use-cases/user/submitSolution.js";
-import type UpdateConsistencyScore from "../use-cases/user/updateConsistencyScore.js";
-import type UpdateUserScore from "../use-cases/user/updateUserScore.js";
-import type UpdateUserProfile from "../use-cases/user/updateUserSettings.js";
-import type RegisterUser from "../use-cases/user/register.js";
-import type GetSubmissionsById from "../use-cases/user/getSubmissionsById.js";
-
+// Conforming with Zod for type agreement
 type OptionalWithUndefined<T> = {
   [K in keyof T]?: T[K] | undefined
 }
@@ -37,6 +36,7 @@ export default class UserController {
     // Validators
     protected profileDataValidator: IValidator<UserSettingsValues | null | undefined>,
 
+    protected mcpNotifier?: INotifier
   ) { }
 
 
@@ -134,11 +134,17 @@ export default class UserController {
   }
 
   async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: UserScores | null | undefined, newScores: UserScores }> {
+    //TODO: Reading User unnecessary times, make more efficient.
     if (!request.userId) {
       throw new ValidationError("userId not present")
     }
 
+    if (this.mcpNotifier && request.mcpServerContext) {
+      await this.mcpNotifier.notify(request.mcpServerContext, 1, 6, "🟢 Submitting your solution!")
+    }
+
     const user = await this.findUserbyId.call(request.userId)
+
     if (user.scores === undefined) {
       throw new InternalServerError("User Data malformed, please reach out to an admin")
     }
@@ -153,15 +159,25 @@ export default class UserController {
       throw new ValidationError('Answer isn\'t of valid type: string')
     }
 
-
-    const result = await this.submitSolution.call(user.id, user.scores, user.last_5_submissions, body.problem_id, body.userInput)
+    if (this.mcpNotifier && request.mcpServerContext) {
+      await this.mcpNotifier.notify(request.mcpServerContext, 2, 6, "🟢 Found your User Profile! Submitting your solution!")
+    }
+    const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput, request.mcpServerContext)
     if (!result) {
       throw new InternalServerError("Didn't get good response from solution submitter")
     }
     if (typeof result.approach_score !== "number" || typeof result.edge_case_score !== "number") {
       throw new InternalServerError("Recieved malformed data from model response")
     }
+
+    if (this.mcpNotifier && request.mcpServerContext) {
+      await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Evaluvated your Solution! Getting your new Scores!")
+    }
     const newUser = await this.findUserbyId.call(user.id)
+
+    if (this.mcpNotifier && request.mcpServerContext) {
+      await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Got your fresh scores!")
+    }
     if (!newUser || !newUser.scores) {
       throw new InternalServerError("Didn't get good response from solution submitter")
     }
@@ -177,8 +193,7 @@ export default class UserController {
       throw new ValidationError("userId not present")
     }
 
-    const user = await this.findUserbyId.call(request.userId)
-    return await this.updateConsistencyScore.call(user.id, user.scores)
+    return await this.updateConsistencyScore.call(request.userId)
   }
 
   async updateSelfProfile(request: IRequest) {
@@ -197,9 +212,7 @@ export default class UserController {
       throw new ValidationError('Invalid user profile data', validationResult.errors)
     }
 
-
     return await this.updateUserSettings.call(request.userId, validationResult.data as profileDataTypes)
-
   }
 
 }

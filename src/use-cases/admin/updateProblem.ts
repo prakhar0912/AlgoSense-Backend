@@ -1,10 +1,6 @@
-import type { Approach } from "../../entities/approach.js";
-import type Problem from "../../entities/problem.js";
-import { ValidationError } from "../../errors/index.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IValidator from "../../interfaces/validator.js";
+import type { Approach, Problem } from "../../entities/index.js";
+import { ValidationError, InternalServerError } from "../../errors/index.js";
+import type { IProblemDAO, IUseCase, IValidator } from "../../interfaces/index.js";
 
 
 type OptionalWithUndefined<T> = {
@@ -15,8 +11,6 @@ type UpdateProblemPayload = OptionalWithUndefined<
   & {
     approaches?: Partial<OptionalWithUndefined<Approach>[] | []>;
   }>;
-
-
 
 
 

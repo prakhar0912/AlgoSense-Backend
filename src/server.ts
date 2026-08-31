@@ -9,7 +9,6 @@ mcp.listen(3000, () => {
   console.log(`MCP listening on port 3000`)
 })
 
-// api.listen(Number(config.port) || 3000, () => {
-//   console.log(`API listening on port
-//     ${config.port || 3000}`)
-// })
+api.listen(3001, () => {
+  console.log(`API listening on port 3001`)
+})

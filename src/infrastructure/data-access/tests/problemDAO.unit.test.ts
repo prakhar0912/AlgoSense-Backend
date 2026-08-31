@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals"
 import type { PoolClient, QueryResultRow } from "pg"
 
-import Problem from "../../../entities/problem.js"
+import { Problem } from "../../../entities/index.js"
 
 const mockedClient = {
   query: jest.fn(),
@@ -12,7 +12,8 @@ await jest.unstable_mockModule("../client.js", () => ({
   default: mockedClient,
 }))
 
-const { default: ProblemDAO } = await import("../problemDAO.js")
+// const { default: ProblemDAO } = await import("../problemDAO.js")
+import ProblemDAO from "../problemDAO.js"
 
 type DbClient = Pick<PoolClient, "query">
 
@@ -259,7 +260,7 @@ describe("ProblemDAO unit", () => {
     }
     const originalError = new Error("database unavailable")
 
-    query.mockRejectedValueOnce(originalError)
+    query.mockRejectedValueOnce(originalError as never)
 
     await expect(dao.create(payload)).rejects.toBe(originalError)
   })

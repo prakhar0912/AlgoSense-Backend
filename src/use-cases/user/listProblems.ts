@@ -1,9 +1,8 @@
-import type Problem from "../../entities/problem.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import ValidationError from "../../errors/validationError.js";
-import type IPaginated from "../../interfaces/paginated.js";
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
-import type IUseCase from "../../interfaces/useCase.js";
+import type { Problem } from "../../entities/index.js";
+import { InternalServerError, ValidationError } from "../../errors/index.js";
+import type { IPaginated, IProblemDAO, IUseCase } from "../../interfaces/index.js";
+
+
 
 type OptionalWithUndefined<T> = {
   [K in keyof T]?: T[K] | undefined

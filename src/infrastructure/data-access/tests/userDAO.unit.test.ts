@@ -7,9 +7,7 @@ await jest.unstable_mockModule('../client.js', () => ({
 }))
 
 const { default: UserDAO } = await import('../userDAO.js')
-import User from '../../../entities/user.js'
-import ShortSubmission from '../../../entities/shortSubmission.js'
-import UserScores from '../../../entities/userScores.js'
+import { User, ShortSubmission, UserScores, Submission } from '../../../entities/index.js'
 
 type MockDbClient = Pick<PoolClient, 'query'>
 
@@ -70,7 +68,8 @@ function createShortSubmission(index: number) {
   return {
     submission_id: `submission-${index}`,
     problem_id: 'problem-1',
-    difficulty: 'medium',
+    problem_title: `problem-tile-${index}`,
+    difficulty: 'medium' as Submission['difficulty'],
     timer: null,
     approach_score: index,
     identified_approach: `approach-${index}`,
@@ -91,7 +90,7 @@ describe('UserDAO', () => {
   })
 
   it('returns null when findById does not find a row', async () => {
-    query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
 
     await expect(dao.findById('user-123')).resolves.toBeNull()
     expect(query).toHaveBeenCalledWith(
@@ -101,7 +100,7 @@ describe('UserDAO', () => {
   })
 
   it('maps a found row into a User instance', async () => {
-    query.mockResolvedValueOnce({ rows: [createUserRow()], rowCount: 1 })
+    query.mockResolvedValueOnce({ rows: [createUserRow()], rowCount: 1 } as never)
 
     const result = await dao.findById('user-123')
 
@@ -139,7 +138,7 @@ describe('UserDAO', () => {
   })
 
   it('returns a paginated payload with an empty data array when no users match', async () => {
-    query.mockResolvedValueOnce({ rows: [], rowCount: 0 })
+    query.mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
 
     const result = await dao.findAll({ banned: true }, 3, 25)
 
@@ -169,7 +168,7 @@ describe('UserDAO', () => {
         },
       ],
       rowCount: 1,
-    })
+    } as never)
 
     const result = await dao.setUserScores('user-123', {
       approaches_score: 50,
@@ -193,8 +192,8 @@ describe('UserDAO', () => {
 
   it('returns true for a deleted row and false when nothing was deleted', async () => {
     query
-      .mockResolvedValueOnce({ rows: [{ id: 'user-123' }], rowCount: 1 })
-      .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+      .mockResolvedValueOnce({ rows: [{ id: 'user-123' }], rowCount: 1 } as never)
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 } as never)
 
     await expect(dao.delete('user-123')).resolves.toBe(true)
     await expect(dao.delete('missing-user')).resolves.toBe(false)
@@ -204,7 +203,7 @@ describe('UserDAO', () => {
     query.mockResolvedValueOnce({
       rows: [{ last_5_submissions: Array.from({ length: 6 }, (_v, index) => createShortSubmission(index + 1)) }],
       rowCount: 1,
-    })
+    } as never)
 
     const result = await dao.getLast5Submissions('user-123')
 
@@ -223,7 +222,7 @@ describe('UserDAO', () => {
     query.mockResolvedValueOnce({
       rows: [{ last_5_submissions: submissions }],
       rowCount: 1,
-    })
+    } as never)
 
     const result = await dao.setSubmissionsInProfile('user-123', submissions)
 
@@ -244,7 +243,7 @@ describe('UserDAO', () => {
     query.mockResolvedValueOnce({
       rows: [{ email_notifications_enabled: false }],
       rowCount: 1,
-    })
+    } as never)
 
     await expect(dao.toggleEmailNotifications('user-123', false)).resolves.toBe(false)
   })
@@ -253,7 +252,7 @@ describe('UserDAO', () => {
     query.mockResolvedValueOnce({
       rows: [],
       rowCount: 0,
-    })
+    } as never)
 
     await expect(dao.toggleEmailNotifications('missing-user', true)).resolves.toBe(false)
   })

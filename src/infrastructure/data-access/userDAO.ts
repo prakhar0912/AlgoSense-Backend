@@ -2,11 +2,8 @@
 import client from './client.js'
 import type { PoolClient, QueryResultRow } from 'pg'
 
-import ShortSubmission from '../../entities/shortSubmission.js'
-import User from '../../entities/user.js'
-import UserScores from '../../entities/userScores.js'
-import type IPaginated from '../../interfaces/paginated.js'
-import type IUserDAO from '../../interfaces/user/userDAO.js'
+import { ShortSubmission, User, UserScores } from '../../entities/index.js'
+import type { IPaginated, IUserDAO } from '../../interfaces/index.js'
 import services from '../../config/services.js'
 
 type DbClient = Pick<PoolClient, 'query'>
@@ -223,6 +220,7 @@ function normalizeShortSubmission(value: unknown): ShortSubmission {
       ? raw.id
       : ''
   submission.problem_id = typeof raw.problem_id === 'string' ? raw.problem_id : ''
+  submission.problem_title = typeof raw.problem_title === 'string' ? raw.problem_title : ''
   submission.difficulty = raw.difficulty as ShortSubmission['difficulty']
   submission.timer = raw.timer === null || raw.timer === undefined ? null : toFiniteNumber(raw.timer)
   submission.approach_score = toFiniteNumber(raw.approach_score)
@@ -252,6 +250,7 @@ function toShortSubmissionJson(submission: unknown): JsonLike {
   return {
     submission_id: normalized.submission_id,
     problem_id: normalized.problem_id,
+    problem_title: normalized.problem_title,
     difficulty: normalized.difficulty,
     timer: normalized.timer,
     approach_score: normalized.approach_score,
@@ -415,6 +414,14 @@ export default class UserDAO implements IUserDAO {
 
   async findById(userId: string) {
     return this.findUserByColumn('id', userId)
+  }
+
+  async findByIdForUpdate(userId: string): Promise<User | null> {
+    const result = await this.db.query<UserRow>(
+      `SELECT ${buildSelectColumns()} FROM users WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      [userId],
+    )
+    return result.rows[0] ? this.mapUserRow(result.rows[0]) : null
   }
 
   async findByEmail(email: string): Promise<User | null> {

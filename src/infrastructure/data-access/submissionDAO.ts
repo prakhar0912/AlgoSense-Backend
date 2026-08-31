@@ -1,9 +1,10 @@
 import client from "./client.js";
 import type { PoolClient, QueryResultRow } from "pg";
 
-import Submission from "../../entities/submission.js";
-import type IPaginated from "../../interfaces/paginated.js";
-import type ISubmissionDAO from "../../interfaces/submission/submissionDAO.js";
+import { Submission } from "../../entities/index.js";
+import type { IPaginated, ISubmissionDAO } from "../../interfaces/index.js";
+
+
 
 type DbClient = Pick<PoolClient, "query">;
 type SubmissionDifficulty = Submission["difficulty"];
@@ -20,6 +21,7 @@ type SubmissionRow = QueryResultRow & {
   id: string;
   user_id: string;
   problem_id: string;
+  problem_title: string;
   difficulty: number | string;
   problem_rating: number | string;
   user_input: string;
@@ -51,6 +53,7 @@ const SUBMISSION_COLUMNS = [
   "id",
   "user_id",
   "problem_id",
+  "problem_title",
   "difficulty",
   "problem_rating",
   "user_input",
@@ -261,6 +264,7 @@ function normalizeSubmissionRow(row: SubmissionRow): Submission {
   submission.id = typeof raw.id === "string" ? raw.id : row.id;
   submission.user_id = typeof raw.user_id === "string" ? raw.user_id : row.user_id;
   submission.problem_id = typeof raw.problem_id === "string" ? raw.problem_id : row.problem_id;
+  submission.problem_title = typeof raw.problem_title === "string" ? raw.problem_title : row.problem_title;
   submission.difficulty = toDifficulty(raw.difficulty ?? row.difficulty);
   submission.problem_rating = toFiniteNumber(raw.problem_rating ?? row.problem_rating);
   submission.user_input = typeof raw.user_input === "string" ? raw.user_input : row.user_input;
@@ -286,6 +290,7 @@ export default class SubmissionDAO implements ISubmissionDAO {
       INSERT INTO submissions (
         user_id,
         problem_id,
+        problem_title,
         difficulty,
         problem_rating,
         user_input,
@@ -300,13 +305,14 @@ export default class SubmissionDAO implements ISubmissionDAO {
         submitted_at,
         elo_diff
       )
-      VALUES ($1, $2, $3::difficulty_enum, $4::double precision, $5, $6::varchar[], $7::bigint, $8::smallint, $9, $10, $11, $12::jsonb[], $13::smallint, $14::varchar(30), $15::double precision)
+      VALUES ($1, $2, $3, $4::difficulty_enum, $5::double precision, $6, $7::varchar[], $8::bigint, $9::smallint, $10, $11, $12, $13::jsonb[], $14::smallint, $15::varchar(30), $16::double precision)
       RETURNING ${buildSelectColumns()}
     `;
 
     const params = [
       submissionPayload.user_id,
       submissionPayload.problem_id,
+      submissionPayload.problem_title,
       toDifficulty(submissionPayload.difficulty),
       submissionPayload.problem_rating,
       submissionPayload.user_input,

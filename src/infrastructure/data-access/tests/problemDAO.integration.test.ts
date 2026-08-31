@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { randomUUID } from "node:crypto"
 import { performance } from "node:perf_hooks"
 
-import Problem from "../../../entities/problem.js"
+import { Problem } from "../../../entities/index.js"
 import client, { pool } from "../client.js"
 import ProblemDAO from "../problemDAO.js"
 

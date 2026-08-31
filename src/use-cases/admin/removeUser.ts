@@ -1,6 +1,8 @@
-import InternalServerError from "../../errors/internalServerError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
+import { InternalServerError } from "../../errors/index.js";
+import type { IUseCase, IUserDAO } from "../../interfaces/index.js";
+
+
+
 
 export default class RemoveUser implements IUseCase<boolean> {
   constructor(

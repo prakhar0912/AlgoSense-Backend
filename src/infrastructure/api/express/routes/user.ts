@@ -1,9 +1,9 @@
-import express from 'express'
-import type { NextFunction, Request, Response } from 'express'
+import express, { type NextFunction, type Request, type Response } from 'express'
 import services from '../../../../config/services.js'
 import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../../use-cases/user/index.js'
 import UserController from '../../../../controllers/user.js'
-import UnauthorizedError from '../../../../errors/unauthorizedError.js'
+import { UnauthorizedError } from '../../../../errors/index.js'
+import checkPermission from '../../../utils/auth/auth0/authorization.js'
 
 import type { AuthResult } from 'express-oauth2-jwt-bearer'
 type JwtRequest = Omit<Request, 'auth'> & {
@@ -18,14 +18,14 @@ const submissionDAO = new services.submission.DAO()
 const userController = new UserController(
   new FindUserbyId(userDAO),
   new DeleteUser(userDAO),
-  new SubmitSolution(userDAO, problemDAO, submissionDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
-  new UpdateConsistencyScore(userDAO),
+  new SubmitSolution(problemDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
+  new UpdateConsistencyScore(),
   new UpdateUserScore(userDAO),
   new UpdateUserProfile(userDAO, services.user.validators.updateUser),
   new RegisterUser(userDAO, services.user.validators.registerValidator),
   new GetSubmissionsById(submissionDAO),
 
-  services.user.validators.updateUser
+  services.user.validators.updateUser,
 )
 
 // TODO: Implement showing all submissions for user, add number of submissions to user table
@@ -34,7 +34,7 @@ const userController = new UserController(
 const router = express.Router()
 
 
-router.get('/profile', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/profile', checkPermission([services.permissions.user.viewSelf]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
     if (userId === undefined) {
@@ -48,7 +48,7 @@ router.get('/profile', async (req: Request, res: Response, next: NextFunction) =
   }
 })
 
-router.get('/submissions', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/submissions', checkPermission([services.permissions.user.viewSelfSubmission]), async (req: Request, res: Response, next: NextFunction) => {
   try {
 
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
@@ -64,7 +64,7 @@ router.get('/submissions', async (req: Request, res: Response, next: NextFunctio
 })
 
 
-router.post('/submitSolution', async (req: Request, res: Response, next: NextFunction) => {
+router.post('/submitSolution', checkPermission([services.permissions.user.createSubmission]), async (req: Request, res: Response, next: NextFunction) => {
   try {
 
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
@@ -81,7 +81,7 @@ router.post('/submitSolution', async (req: Request, res: Response, next: NextFun
 })
 
 
-router.delete('/delete', async (req: Request, res: Response, next: NextFunction) => {
+router.delete('/delete', checkPermission([services.permissions.user.deleteSelf]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
 

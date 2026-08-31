@@ -1,6 +1,7 @@
-export default class ShortSubmission {
+export class ShortSubmission {
   submission_id!: string
   problem_id!: string
+  problem_title!: string
   difficulty!: "easy" | "medium" | "hard" | "expert"
   timer?: number | null
   approach_score!: number

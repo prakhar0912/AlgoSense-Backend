@@ -1,9 +1,10 @@
 import client from "./client.js"
 import type { PoolClient, QueryResultRow } from "pg"
 
-import Problem from "../../entities/problem.js"
-import type IPaginated from "../../interfaces/paginated.js"
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js"
+import { Problem } from "../../entities/index.js"
+import type { IPaginated, IProblemDAO } from "../../interfaces/index.js"
+
+
 
 type DbClient = Pick<PoolClient, "query">
 

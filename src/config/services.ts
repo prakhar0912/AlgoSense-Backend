@@ -6,10 +6,12 @@ import * as validators from '../infrastructure/validation/zod/index.js'
 
 import askGPT from '../infrastructure/utils/logic/askGPT.js'
 import getConsistencyScore from '../infrastructure/utils/logic/getConsistencyScore.js'
+import mcpNotifier from '../infrastructure/utils/notifier/mcpNotifier.js'
 
 export default {
   user: {
     validators: validators.user,
+    notifier: mcpNotifier,
     DAO: UserDAO,
   },
   problem: {

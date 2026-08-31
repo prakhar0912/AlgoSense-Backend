@@ -1,4 +1,4 @@
-export default class UserScores {
+export class UserScores {
   initial_elo_rating!: number
   elo_rating!: number
   topic_ratings!: {

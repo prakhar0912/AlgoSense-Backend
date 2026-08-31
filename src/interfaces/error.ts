@@ -1,7 +1,7 @@
-export default interface IError {
-    name: string
-    message: string
-    httpStatusCode: number
-    details?: any
-    originalError?:any
+export interface IError {
+  name: string
+  message: string
+  httpStatusCode: number
+  details?: any
+  originalError?: any
 }

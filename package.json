@@ -6,10 +6,10 @@
   "scripts": {
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "dev": "tsx watch ./src/server.ts",
-    "dev-mcp": "tsc && node dist/server.js",
+    "test-mcp": "npx @mcpjam/inspector@latest",
     "build": "tsc",
     "start": "node dist/app.js",
-    "inspect": "mcp-inspector --web --transport http --server-url http://localhost:3000/mcp"
+    "build-mcp": "vite build"
   },
   "keywords": [],
   "author": "",
@@ -35,7 +35,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/express": "^2.0.0",
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@modelcontextprotocol/node": "^2.0.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@modelcontextprotocol/server": "^2.0.0",
     "argon2": "^0.44.0",
     "cors": "^2.8.6",
@@ -49,6 +51,8 @@
     "morgan": "^1.11.0",
     "openai": "^6.48.0",
     "pg": "^8.22.0",
+    "vite": "^8.2.2",
+    "vite-plugin-singlefile": "^2.3.3",
     "zod": "^4.4.3"
   }
 }

@@ -1,8 +1,6 @@
-import UnauthorizedError from "../../errors/unauthorizedError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
-import User from "../../entities/user.js";
-import InternalServerError from "../../errors/internalServerError.js";
+import { UnauthorizedError, InternalServerError } from "../../errors/index.js";
+import type { IUseCase, IUserDAO } from "../../interfaces/index.js";
+import type { User } from "../../entities/index.js";
 
 
 

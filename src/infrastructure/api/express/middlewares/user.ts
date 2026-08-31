@@ -17,8 +17,8 @@ const submissionDAO = new services.submission.DAO()
 const userController = new UserController(
   new FindUserbyId(userDAO),
   new DeleteUser(userDAO),
-  new SubmitSolution(userDAO, problemDAO, submissionDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
-  new UpdateConsistencyScore(userDAO),
+  new SubmitSolution(problemDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator),
+  new UpdateConsistencyScore(),
   new UpdateUserScore(userDAO),
   new UpdateUserProfile(userDAO, services.user.validators.updateUser),
   new RegisterUser(userDAO, services.user.validators.registerValidator),

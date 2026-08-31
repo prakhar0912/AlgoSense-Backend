@@ -9,4 +9,15 @@ import GetProblemBySlugForAdmin from "./getProblemBySlug.js";
 import GetProblemByIdForAdmin from "./getProblemById.js";
 import ListProblemsForAdmin from "./listProblems.js";
 
-export { GetProblemByIdForAdmin, GetProblemBySlugForAdmin, ListProblemsForAdmin, CreateProblem, DeleteProblem, ListUsers, RemoveUser, ToggleBanUser, UpdateProblem, UpdateUser }
+export {
+  GetProblemByIdForAdmin,
+  GetProblemBySlugForAdmin,
+  ListProblemsForAdmin,
+  CreateProblem,
+  DeleteProblem,
+  ListUsers,
+  RemoveUser,
+  ToggleBanUser,
+  UpdateProblem,
+  UpdateUser
+}

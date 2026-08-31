@@ -1,4 +1,4 @@
-export default interface ModelResponse {
+export interface ModelResponse {
   user_explanation_identified_apporach: string,
   user_explanation_rating: "optimal" | "correct" | "partially_correct" | "incorrect",
   user_explanation_pass: boolean,

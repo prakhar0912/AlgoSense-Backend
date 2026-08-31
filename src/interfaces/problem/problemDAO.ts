@@ -1,7 +1,7 @@
 import Problem from "../../entities/problem.js"
-import type IPaginated from "../../interfaces/paginated.js"
+import type { IPaginated } from "../../interfaces/index.js"
 
-export default interface IProblemDAO {
+export interface IProblemDAO {
   create(problemData: Partial<Problem>): Promise<Problem>
   update(problemId: string, payload: Partial<Problem>): Promise<Problem>
   delete(problemId: string): Promise<boolean>

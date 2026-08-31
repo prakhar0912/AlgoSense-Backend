@@ -1,5 +1,5 @@
-import type Problem from '../../../entities/problem.js';
-import type ModelResponse from '../../../interfaces/problem/modelResponse.js';
+import type { Problem } from '../../../entities/index.js';
+import type { ModelResponse } from '../../../interfaces/index.js';
 import "dotenv/config.js"
 import keys from "../../../config/app.js"
 

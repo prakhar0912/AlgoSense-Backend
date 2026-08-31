@@ -1,8 +1,9 @@
 
-export default class Submission {
+export class Submission {
   id!: string
   user_id!: string
   problem_id!: string
+  problem_title!: string
   difficulty!: "easy" | "medium" | "hard" | "expert"
   problem_rating!: number
   user_input!: string
@@ -17,22 +18,24 @@ export default class Submission {
   submitted_at!: string
   elo_diff!: number
 }
+
+
+
 // id uuid NOT NULL DEFAULT uuidv7(),
-//     user_id uuid NOT NULL,
-//     problem_id uuid NOT NULL,
-//     timer bigint,
-//     approach_score smallint NOT NULL,
-//     identified_approach character varying(100) COLLATE pg_catalog."default" NOT NULL,
-//     pass boolean NOT NULL,
-//     edge_case_score smallint NOT NULL,
-//     submitted_at character varying(30) COLLATE pg_catalog."default" NOT NULL,
-//     edge_cases jsonb[],
-//     user_input character varying(3000) COLLATE pg_catalog."default",
-//     difficulty difficulty_enum NOT NULL,
-//     problem_rating double precision NOT NULL,
-//     hints_used character varying(1000)[] COLLATE pg_catalog."default",
-//     elo_diff double precision NOT NULL,
-//     missing_points character varying(4000) COLLATE pg_catalog."default",
-
-
+// problem_id uuid NOT NULL,
+// timer bigint,
+// approach_score smallint NOT NULL,
+// identified_approach character varying(100) COLLATE pg_catalog."default" NOT NULL,
+// pass boolean NOT NULL,
+// edge_case_score smallint NOT NULL,
+// submitted_at character varying(30) COLLATE pg_catalog."default" NOT NULL,
+// edge_cases jsonb[],
+// user_input character varying(3000) COLLATE pg_catalog."default",
+// difficulty difficulty_enum NOT NULL,
+// problem_rating double precision NOT NULL,
+// hints_used character varying(1000)[] COLLATE pg_catalog."default",
+// elo_diff double precision NOT NULL,
+// missing_points character varying(4000) COLLATE pg_catalog."default",
+// user_id character varying(100) COLLATE pg_catalog."default" NOT NULL,
+// problem_title character varying(1000) COLLATE pg_catalog."default" NOT NULL,
 

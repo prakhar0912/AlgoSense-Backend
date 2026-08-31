@@ -1,10 +1,6 @@
-import type Problem from "../../entities/problem.js";
-import { ValidationError } from "../../errors/index.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type { IValidatorResult } from "../../interfaces/validator.js";
-import type IValidator from "../../interfaces/validator.js";
+import type { Problem } from "../../entities/index.js";
+import { ValidationError, InternalServerError } from "../../errors/index.js";
+import type { IValidator, IProblemDAO, IUseCase, IValidatorResult } from "../../interfaces/index.js";
 
 export default class CreateProblem implements IUseCase<Problem> {
   constructor(

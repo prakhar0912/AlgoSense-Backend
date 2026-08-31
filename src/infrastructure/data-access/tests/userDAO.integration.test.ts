@@ -2,9 +2,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 
-import ShortSubmission from "../../../entities/shortSubmission.js";
-import User from "../../../entities/user.js";
-import UserScores from "../../../entities/userScores.js";
+import { ShortSubmission, User, UserScores } from "../../../entities/index.js";
 import client, { pool } from "../client.js";
 import UserDAO from "../userDAO.js";
 

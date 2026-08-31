@@ -1,76 +1,91 @@
-import type UserScores from "../../entities/userScores.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
-import type User from "../../entities/user.js";
+import type { UserScores, User } from "../../entities/index.js";
+import { InternalServerError, UnauthorizedError } from "../../errors/index.js";
+import type { IUseCase } from "../../interfaces/index.js";
 import services from "../../config/services.js";
+import { runInTransaction } from "../../infrastructure/data-access/client.js";
+import UserDAO from "../../infrastructure/data-access/userDAO.js";
 
 export default class UpdateConsistencyScore implements IUseCase<UserScores> {
-  constructor(
-    private userDAO: IUserDAO,
-  ) { }
-  async call(userId: string, userScores: User['scores']): Promise<UserScores> {
-    if (typeof userScores === 'undefined') {
-      throw new InternalServerError("User data malformed, scores is undefined")
-    }
-    const daysLoggedIn = userScores && userScores.days_logged_in ? userScores.days_logged_in : []
-    if (!userScores || daysLoggedIn.length === 0) {
-      daysLoggedIn.push(new Date().toISOString())
-    }
-    else {
-      const lastLoginStr = daysLoggedIn[daysLoggedIn.length - 1]
-      if (!lastLoginStr) {
-        throw new InternalServerError("Invalid latest login date: null or undefined");
+  constructor() { }
+  async call(userId: string): Promise<UserScores> {
+    const newUserScores: User['scores'] = await runInTransaction(async (client) => {
+      const userDAO = new UserDAO(client)
+      let user: User | null
+      try {
+        user = await userDAO.findByIdForUpdate(userId)
       }
-      const latestLoginDate = new Date(lastLoginStr)
-      if (isNaN(latestLoginDate.getTime())) {
-        throw new InternalServerError("Invalid Login data, latest date: " + latestLoginDate);
+      catch (e) {
+        throw new InternalServerError('Unable to fetch user from DB.', e)
+      }
+      if (!user) {
+        throw new UnauthorizedError('AlgoSense account not found!')
       }
 
-
-      const Midnight = new Date();
-      Midnight.setHours(0, 0, 0, 0);
-
-      // 3. Get the input date at midnight (00:00:00) to ignore time differences
-      const latestMidnight = new Date(latestLoginDate);
-      latestMidnight.setHours(0, 0, 0, 0);
-
-      // 4. Compare timestamps
-      let isFirstLoginToday = latestMidnight.getTime() < Midnight.getTime();
-
-
-      if (isFirstLoginToday) {
+      if (typeof user.scores === 'undefined') {
+        throw new InternalServerError("User data malformed, scores is undefined")
+      }
+      const daysLoggedIn = user.scores && user.scores.days_logged_in ? user.scores.days_logged_in : []
+      if (!user.scores || daysLoggedIn.length === 0) {
         daysLoggedIn.push(new Date().toISOString())
       }
       else {
-        return userScores
+        const lastLoginStr = daysLoggedIn[daysLoggedIn.length - 1]
+        if (!lastLoginStr) {
+          throw new InternalServerError("Invalid latest login date: null or undefined");
+        }
+        const latestLoginDate = new Date(lastLoginStr)
+        if (isNaN(latestLoginDate.getTime())) {
+          throw new InternalServerError("Invalid Login data, latest date: " + latestLoginDate);
+        }
+
+
+        const Midnight = new Date();
+        Midnight.setHours(0, 0, 0, 0);
+
+        // 3. Get the input date at midnight (00:00:00) to ignore time differences
+        const latestMidnight = new Date(latestLoginDate);
+        latestMidnight.setHours(0, 0, 0, 0);
+
+        // 4. Compare timestamps
+        let isFirstLoginToday = latestMidnight.getTime() < Midnight.getTime();
+
+
+        if (isFirstLoginToday) {
+          daysLoggedIn.push(new Date().toISOString())
+        }
+        else {
+          return user.scores
+        }
       }
-    }
 
-    let consistencyScore: number;
-    let totalScore: number
-    try {
-      const newScores = this.calculateNewScores(daysLoggedIn, userScores)
-      consistencyScore = newScores.consistencyScore
-      totalScore = newScores.totalScore
-    }
-    catch (e) {
-      throw new InternalServerError('Unable to calculate consistency score.', e)
-    }
+      let consistencyScore: number;
+      let totalScore: number
+      try {
+        const newScores = this.calculateNewScores(daysLoggedIn, user.scores)
+        consistencyScore = newScores.consistencyScore
+        totalScore = newScores.totalScore
+      }
+      catch (e) {
+        throw new InternalServerError('Unable to calculate consistency score.', e)
+      }
 
-    let updatedUserScores: UserScores
-    try {
-      updatedUserScores = await this.userDAO.setUserScores(userId, {
-        consistency_score: consistencyScore,
-        days_logged_in: daysLoggedIn,
-        total_score: totalScore
-      })
+      let updatedUserScores: UserScores
+      try {
+        updatedUserScores = await userDAO.setUserScores(userId, {
+          consistency_score: consistencyScore,
+          days_logged_in: daysLoggedIn,
+          total_score: totalScore
+        })
+      }
+      catch (e) {
+        throw new InternalServerError('Unable to store new Scores.')
+      }
+      return updatedUserScores
+    })
+    if (!newUserScores) {
+      throw new InternalServerError("Failed to update the consistency score!")
     }
-    catch (e) {
-      throw new InternalServerError('Unable to store new Scores.')
-    }
-    return updatedUserScores
-
+    return newUserScores
   }
 
   calculateNewScores(daysLoggedIn: string[], userScores: UserScores): { totalScore: number, consistencyScore: number } {

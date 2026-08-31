@@ -1,11 +1,13 @@
-import express from 'express'
-import type { NextFunction, Request, Response } from 'express'
+import express, { type NextFunction, type Request, type Response } from 'express'
 import services from '../../../../config/services.js'
 import { GetProblemByIdForAdmin, GetProblemBySlugForAdmin, ListProblemsForAdmin, CreateProblem, DeleteProblem, UpdateProblem } from '../../../../use-cases/admin/index.js'
 import { GetProblemByIdForUser, GetProblemBySlugForUser, ListProblemsForUser } from '../../../../use-cases/user/index.js'
 import ProblemController from '../../../../controllers/problem.js'
-import { UnauthorizedError } from 'express-oauth2-jwt-bearer'
 import type { AuthResult } from 'express-oauth2-jwt-bearer'
+import { UnauthorizedError } from '../../../../errors/index.js'
+import checkPermission from '../../../utils/auth/auth0/authorization.js'
+
+
 type JwtRequest = Omit<Request, 'auth'> & {
   auth?: AuthResult
 }
@@ -34,7 +36,7 @@ const router = express.Router()
 
 
 
-router.get('/all', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/all', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
 
@@ -53,25 +55,24 @@ router.get('/all', async (req: Request, res: Response, next: NextFunction) => {
 })
 
 
-router.get('/byId/:id', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/byId/:id', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
     if (userId === undefined) {
       throw new UnauthorizedError('User ID is required')
     }
     if (req.params.id === undefined) {
-      throw new Error('User ID is required')
+      throw new Error('Problem ID is required')
     }
     const id = String(req.params.id)
-    const { page, perPage } = req.query as unknown as { page: number; perPage: number }
-    const result = await problemController.getProblemByIdUser({ userId, params: { id, page, perPage } })
+    const result = await problemController.getProblemByIdUser({ userId, params: { id } })
     res.send(result)
   } catch (err) {
     next(err)
   }
 })
 
-router.get('/bySlug/:slug', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/bySlug/:slug', checkPermission([services.permissions.user.viewPartialProblem]), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
 
@@ -79,11 +80,10 @@ router.get('/bySlug/:slug', async (req: Request, res: Response, next: NextFuncti
       throw new UnauthorizedError('User ID is required')
     }
     if (req.params.slug === undefined) {
-      throw new Error('User ID is required')
+      throw new Error('Problem Slug is required')
     }
     const id = String(req.params.slug)
-    const { page, perPage } = req.query as unknown as { page: number; perPage: number }
-    const result = await problemController.getProblemBySlugUser({ userId, params: { id, page, perPage } })
+    const result = await problemController.getProblemBySlugUser({ userId, params: { id } })
     res.send(result)
   } catch (err) {
     next(err)

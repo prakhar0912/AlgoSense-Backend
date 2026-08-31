@@ -1,9 +1,6 @@
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
-import { ValidationError } from "../../errors/index.js";
-import type IValidator from "../../interfaces/validator.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import type User from "../../entities/user.js";
+import type { IUseCase, IUserDAO, IValidator } from "../../interfaces/index.js";
+import { ValidationError, InternalServerError } from "../../errors/index.js";
+import type { User } from "../../entities/index.js";
 
 
 type UserCreationPayload = {

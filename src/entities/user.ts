@@ -1,7 +1,7 @@
-import UserScores from "./userScores.js"
-import ShortSubmission from "./shortSubmission.js"
+import { UserScores } from "./userScores.js"
+import { ShortSubmission } from "./shortSubmission.js"
 
-export default class User {
+export class User {
   id!: string
   email!: string
   first_name?: string | undefined

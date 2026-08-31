@@ -1,10 +1,10 @@
 import type ShortSubmission from "../../entities/shortSubmission.js"
 import User from "../../entities/user.js"
 import type UserScores from "../../entities/userScores.js"
-import type IPaginated from "../paginated.js"
+import type { IPaginated } from "../paginated.js"
 
 
-export default interface IUserDAO {
+export interface IUserDAO {
   create(userData: User): Promise<User>  // Store User data into the Users table in the db
   update(userId: string, payload: Partial<User>): Promise<User> // Update the user based on the userId in the Users table using the payload, it could update any field in the user row.
   updateSelfProfile(userId: string, payload: Partial<User>): Promise<User> //Update the Users information in the Users table based on userId

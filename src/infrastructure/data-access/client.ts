@@ -1,6 +1,7 @@
-import pg from "pg"
+import pg, { type PoolClient } from "pg"
 const { Pool } = pg
 import keys from "../../config/app.js"
+import InternalServerError from "../../errors/internalServerError.js"
 
 
 const config = {
@@ -19,3 +20,25 @@ pool.on('error', (err: unknown) => {
 
 const client = await pool.connect()
 export default client
+
+export type TransactionClient =
+  Pick<PoolClient, "query">
+
+export async function runInTransaction<T>(work: (client: PoolClient) => Promise<T>) {
+  const client = await pool.connect()
+  try {
+    await client.query("BEGIN")
+    const result = await work(client)
+    await client.query("COMMIT")
+    return result
+  }
+  catch (error) {
+    await client.query("ROLLBACK").catch((e) => {
+      throw new InternalServerError("Failed to rollback transaction", e)
+    })
+    console.log("ROLLED BACK BABY")
+  }
+  finally {
+    client.release()
+  }
+}

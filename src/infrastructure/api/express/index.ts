@@ -1,10 +1,10 @@
 import express from 'express'
-import type { Request, Response, NextFunction } from 'express'
+import type { Request, Response } from 'express'
 import logger from 'morgan'
 import cors from 'cors'
 import methodOverride from 'method-override'
 import routes from './routes/index.js'
-import type IError from '../../../interfaces/error.js'
+import type { IError } from '../../../interfaces/index.js'
 import { newUserRegistration, newLogin } from './middlewares/user.js'
 import auth from '../../utils/auth/auth0/auth.js'
 

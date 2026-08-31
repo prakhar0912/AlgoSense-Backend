@@ -1,9 +1,8 @@
-import type User from "../../entities/user.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import ValidationError from "../../errors/validationError.js";
-import type IPaginated from "../../interfaces/paginated.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
+import type { User } from "../../entities/index.js";
+import { InternalServerError, ValidationError } from "../../errors/index.js";
+import type { IPaginated, IUseCase, IUserDAO } from "../../interfaces/index.js";
+
+
 
 export default class ListUsers implements IUseCase<IPaginated<User>> {
   constructor(

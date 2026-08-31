@@ -1,6 +1,5 @@
-import InternalServerError from "../../errors/internalServerError.js";
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
-import type IUseCase from "../../interfaces/useCase.js";
+import { InternalServerError } from "../../errors/index.js";
+import type { IProblemDAO, IUseCase } from "../../interfaces/index.js";
 
 export default class DeleteProblem implements IUseCase<boolean> {
   constructor(

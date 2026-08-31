@@ -1,33 +1,24 @@
-import Problem from "../../entities/problem.js";
-import Submission from "../../entities/submission.js";
-import UserScores from "../../entities/userScores.js";
-import User from "../../entities/user.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import NotFoundError from "../../errors/notFoundError.js";
-import ValidationError from "../../errors/validationError.js";
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
-import type ISubmissionDAO from "../../interfaces/submission/submissionDAO.js";
-import type IUseCase from "../../interfaces/useCase.js";
-import type { IValidatorResult } from "../../interfaces/validator.js";
-import type IValidator from "../../interfaces/validator.js";
-import type IUserDAO from "../../interfaces/user/userDAO.js";
-import ShortSubmission from "../../entities/shortSubmission.js";
-import type ModelResponse from "../../interfaces/problem/modelResponse.js";
+import { type Problem, type Submission, type UserScores, type User, ShortSubmission } from "../../entities/index.js";
+import { InternalServerError, NotFoundError, ValidationError, UnauthorizedError } from "../../errors/index.js";
+import type { IUseCase, IProblemDAO, IValidatorResult, IValidator, ModelResponse, INotifier } from "../../interfaces/index.js";
 import services from "../../config/services.js";
+import type { ServerContext } from "@modelcontextprotocol/server";
+import { runInTransaction } from "../../infrastructure/data-access/client.js";
+import UserDAO from "../../infrastructure/data-access/userDAO.js";
+import SubmissionDAO from "../../infrastructure/data-access/submissionDAO.js";
 
 
 
 export default class SubmitSolution implements IUseCase<Submission> {
   constructor(
-    private userDAO: IUserDAO,
     private problemDAO: IProblemDAO,
-    private submissionDAO: ISubmissionDAO,
     private askGPT: (systemPrompt: Problem, userInput: string) => Promise<ModelResponse>,
     private submissionValidator: IValidator<ModelResponse>,
-    private userSolutionValidator: IValidator<string>
+    private userSolutionValidator: IValidator<string>,
+    private progressNotifier?: INotifier
   ) { }
 
-  async call(userId: string, userScores: User['scores'], last5submissions: User['last_5_submissions'], problemId: string, userInput: string): Promise<Submission> {
+  async call(userId: string, problemId: string, userInput: string, mcpServerContext?: ServerContext): Promise<Submission> {
 
     if (typeof userId !== "string" || typeof userId === "string" && userId.trim().length === 0) {
       throw new ValidationError('User ID value invalid')
@@ -36,11 +27,6 @@ export default class SubmitSolution implements IUseCase<Submission> {
     if (typeof problemId !== "string" || typeof problemId === "string" && problemId.trim().length === 0) {
       throw new ValidationError('Problem ID value invalid')
     }
-
-    if (typeof userScores === 'undefined') {
-      throw new InternalServerError('User Data Malformed, userScores is undefined')
-    }
-
 
     let validatedUserInput: IValidatorResult<string>
     try {
@@ -66,6 +52,10 @@ export default class SubmitSolution implements IUseCase<Submission> {
     }
 
 
+    if (this.progressNotifier && mcpServerContext) {
+      await this.progressNotifier.notify(mcpServerContext, 3, 6, "🟢 Calculating Scores and Metrics")
+    }
+
     let modelResp
     try {
       modelResp = await this.askGPT(problem, validatedUserInput.data)
@@ -87,6 +77,10 @@ export default class SubmitSolution implements IUseCase<Submission> {
       throw new InternalServerError('The model responded incorrectly', errors)
     }
 
+
+    if (this.progressNotifier && mcpServerContext) {
+      await this.progressNotifier.notify(mcpServerContext, 4, 6, "🟢 Got your solution scores!")
+    }
     let validatedData: ModelResponse = data
 
     console.log("Validated Model Response", validatedData)
@@ -113,104 +107,127 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
 
-    const {
-      mergedApproachScore,
-      mergedEdgeCaseScore,
-      totalScore,
-      numberOfAttempts
-    } = await this.calculateNewUserScores(userId, userScores, problem.id, finalApproachScore, edgeCaseScore, problem.difficulty)
-
-    let userEloRating = userScores?.elo_rating
-    if (!userEloRating) {
-      userEloRating = 1500
-    }
-
-    const ratingChange = this.calculateRatingChange(problem, userEloRating, userId, userScores, finalApproachScore, edgeCaseScore, numberOfAttempts)
-
-    console.log("Rating Change: ", ratingChange)
-    if (Number.isNaN(ratingChange)) {
-      throw new InternalServerError('Rating Change value is not a number')
-    }
-
-
-    let topicRatingsChange: Record<string, number> = {}
-    for (const topic of problem.primary_topics) {
-      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
-        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
-          userScores.elo_rating + ratingChange :
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + ratingChange
+    const submissionData: Submission | undefined = await runInTransaction<Submission>(async (client) => {
+      const userDAO = new UserDAO(client)
+      const submissionDAO = new SubmissionDAO(client)
+      let user: User | null
+      try {
+        user = await userDAO.findByIdForUpdate(userId)
       }
-    }
-    for (const topic of problem.secondary_topics) {
-      if (userScores?.topic_ratings && Object.hasOwn(userScores?.topic_ratings, topic)) {
-        topicRatingsChange[topic as keyof typeof userScores.topic_ratings] = userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] === 0 ?
-          userScores.elo_rating + 0.5 * ratingChange :
-          userScores?.topic_ratings[topic as keyof typeof userScores.topic_ratings] + 0.5 * ratingChange
+      catch (e) {
+        throw new InternalServerError('Unable to fetch user from DB.', e)
       }
-    }
+      if (!user) {
+        throw new UnauthorizedError('AlgoSense account not found!')
+      }
+      const {
+        mergedApproachScore,
+        mergedEdgeCaseScore,
+        totalScore,
+        numberOfAttempts
+      } = await this.calculateNewUserScores(userId, user.scores, problem.id, finalApproachScore, edgeCaseScore, problem.difficulty, submissionDAO)
+
+      let userEloRating: number | undefined = Number.isNaN(user.scores?.elo_rating) ? user.scores?.initial_elo_rating : user.scores?.elo_rating
+      if (Number.isNaN(userEloRating) || !userEloRating) {
+        userEloRating = 1500
+      }
+
+      const ratingChange = this.calculateRatingChange(problem, userEloRating, user.scores, finalApproachScore, edgeCaseScore, numberOfAttempts)
+
+      console.log("Rating Change: ", ratingChange)
+      if (Number.isNaN(ratingChange)) {
+        throw new InternalServerError('Rating Change value is not a number')
+      }
 
 
-    let submissionData: Submission
-    try {
-      submissionData = await this.submissionDAO.create({
-        user_id: userId,
-        problem_id: problemId,
-        user_input: userInput,
-        difficulty: problem.difficulty,
-        problem_rating: problem.rating,
-        approach_score: finalApproachScore,
-        identified_approach: validatedData.user_explanation_identified_apporach,
-        pass: validatedData.user_explanation_pass,
-        missing_points: validatedData.missing_points_in_user_explanation,
-        edge_cases: finalEdgeCaseData,
-        edge_case_score: edgeCaseScore,
-        submitted_at: new Date().toISOString(),
-        elo_diff: ratingChange,
-      })
-    }
-    catch (e) {
-      throw new InternalServerError('Failed to add submission to database', e)
-    }
+      let topicRatingsChange: Record<string, number> = {}
+      for (const topic of problem.primary_topics) {
+        if (user.scores?.topic_ratings && Object.hasOwn(user.scores?.topic_ratings, topic)) {
+          topicRatingsChange[topic as keyof typeof user.scores.topic_ratings] =
+            user.scores.topic_ratings[topic as keyof typeof user.scores.topic_ratings] === 0 ?
+              userEloRating + ratingChange :
+              user.scores.topic_ratings[topic as keyof typeof user.scores.topic_ratings] + ratingChange
+        }
+      }
+      for (const topic of problem.secondary_topics) {
+        if (user.scores?.topic_ratings && Object.hasOwn(user.scores?.topic_ratings, topic)) {
+          topicRatingsChange[topic as keyof typeof user.scores.topic_ratings] =
+            user.scores?.topic_ratings[topic as keyof typeof user.scores.topic_ratings] === 0 ?
+              userEloRating + 0.5 * ratingChange :
+              user.scores?.topic_ratings[topic as keyof typeof user.scores.topic_ratings] + 0.5 * ratingChange
+        }
+      }
 
-    console.log('Final User Scores: ', {
-      approaches_score: mergedApproachScore,
-      edge_case_score: mergedEdgeCaseScore,
-      total_score: totalScore,
-      elo_rating: userEloRating + ratingChange,
-      topic_ratings: topicRatingsChange
-    })
 
-    let updatedUserScores: UserScores
-    try {
-      updatedUserScores = await this.userDAO.setUserScores(userId, {
+      let submissionData: Submission
+      try {
+        submissionData = await submissionDAO.create({
+          user_id: userId,
+          problem_id: problemId,
+          user_input: userInput,
+          problem_title: problem.title,
+          difficulty: problem.difficulty,
+          problem_rating: problem.rating,
+          approach_score: finalApproachScore,
+          identified_approach: validatedData.user_explanation_identified_apporach,
+          pass: validatedData.user_explanation_pass,
+          missing_points: validatedData.missing_points_in_user_explanation,
+          edge_cases: finalEdgeCaseData,
+          edge_case_score: edgeCaseScore,
+          submitted_at: new Date().toISOString(),
+          elo_diff: ratingChange,
+        })
+      }
+      catch (e) {
+        throw new InternalServerError('Failed to add submission to database', e)
+      }
+
+      console.log('Final User Scores: ', {
         approaches_score: mergedApproachScore,
         edge_case_score: mergedEdgeCaseScore,
         total_score: totalScore,
         elo_rating: userEloRating + ratingChange,
         topic_ratings: topicRatingsChange
       })
+
+      let updatedUserScores: UserScores
+      try {
+        updatedUserScores = await userDAO.setUserScores(userId, {
+          approaches_score: mergedApproachScore,
+          edge_case_score: mergedEdgeCaseScore,
+          total_score: totalScore,
+          elo_rating: userEloRating + ratingChange,
+          topic_ratings: topicRatingsChange
+        })
+      }
+      catch (e) {
+        throw new InternalServerError('Unable to store new Scores.')
+      }
+
+
+      let last5submissions = user.last_5_submissions && Array.isArray(user.last_5_submissions) ? user.last_5_submissions : []
+
+      const newestToOldest = this.buildNewLast5Submissions(submissionData, last5submissions)
+
+      let updatedShortSubmissions: ShortSubmission[]
+      try {
+        updatedShortSubmissions = await userDAO.setSubmissionsInProfile(userId, newestToOldest)
+      }
+      catch (e) {
+        throw new InternalServerError('Unable to store new Submission Data to Database.')
+      }
+
+      return submissionData
+
+    })
+    if (!submissionData) {
+      throw new InternalServerError("Failed to save submission to DB")
     }
-    catch (e) {
-      throw new InternalServerError('Unable to store new Scores.')
-    }
-
-
-    last5submissions = last5submissions && Array.isArray(last5submissions) ? last5submissions : []
-
-    const newestToOldest = this.buildNewLast5Submissions(submissionData, last5submissions)
-
-    let updatedShortSubmissions: ShortSubmission[]
-    try {
-      updatedShortSubmissions = await this.userDAO.setSubmissionsInProfile(userId, newestToOldest)
-    }
-    catch (e) {
-      throw new InternalServerError('Unable to store new Submission Data to Database.')
-    }
-
     return submissionData
+
   }
 
-  calculateRatingChange(problem: Problem, userEloRating: number, userId: string, userScores: UserScores, finalApproachScore: number, edgeCaseScore: number, numberOfAttempts: number) {
+  calculateRatingChange(problem: Problem, userEloRating: number, userScores: UserScores | null | undefined, finalApproachScore: number, edgeCaseScore: number, numberOfAttempts: number) {
 
     const userPerformance: number = 0.55 * (finalApproachScore / 100) +
       0.25 * (edgeCaseScore / 100) +
@@ -228,8 +245,8 @@ export default class SubmitSolution implements IUseCase<Submission> {
       }
     }
     const weightedAveragePrimaryTopicRating: number =
-      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length) ||
-        totalPrimaryTopicRating === 0 ?
+      Number.isNaN(totalPrimaryTopicRating / problem.primary_topics.length)
+        || totalPrimaryTopicRating === 0 ?
         0.3 * userEloRating : 0.3 * (totalPrimaryTopicRating / problem.primary_topics.length)
 
     let totalSecondaryTopicRating: number = 0
@@ -268,11 +285,11 @@ export default class SubmitSolution implements IUseCase<Submission> {
     return ratingChange
   }
 
-  async calculateNewUserScores(userId: string, userScores: UserScores, problemId: string, newApproachScore: number, newEdgeCaseScore: number, problemDifficulty: string) {
+  async calculateNewUserScores(userId: string, userScores: UserScores | null | undefined, problemId: string, newApproachScore: number, newEdgeCaseScore: number, problemDifficulty: string, submissionDAO: SubmissionDAO) {
     let userSubmissionsData: { approach_score: number, submitted_at: string, difficulty: string, edge_case_score: number, problem_id: string }[] | []
 
     try {
-      userSubmissionsData = await this.submissionDAO.viewScoresByUser(userId)
+      userSubmissionsData = await submissionDAO.viewScoresByUser(userId)
     }
     catch (e) {
       throw new InternalServerError('Failed to fetch user submissions from the database', e)
@@ -324,6 +341,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     newShortSubmission.submission_id = submissionData.id
     newShortSubmission.problem_id = submissionData.problem_id
+    newShortSubmission.problem_title = submissionData.problem_title
     newShortSubmission.difficulty = submissionData.difficulty
     newShortSubmission.timer = submissionData.timer ? submissionData.timer : null
     newShortSubmission.approach_score = submissionData.approach_score

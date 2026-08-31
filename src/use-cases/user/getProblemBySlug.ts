@@ -1,9 +1,6 @@
-import type Problem from "../../entities/problem.js";
-import { ValidationError } from "../../errors/index.js";
-import InternalServerError from "../../errors/internalServerError.js";
-import NotFoundError from "../../errors/notFoundError.js";
-import type IProblemDAO from "../../interfaces/problem/problemDAO.js";
-import type IUseCase from "../../interfaces/useCase.js";
+import type { Problem } from "../../entities/index.js";
+import { ValidationError, InternalServerError, NotFoundError } from "../../errors/index.js";
+import type { IProblemDAO, IUseCase } from "../../interfaces/index.js";
 
 export default class GetProblemBySlugForUser implements IUseCase<Omit<Problem, 'approaches' | 'hints' | 'evaluation_criteria'>> {
   constructor(

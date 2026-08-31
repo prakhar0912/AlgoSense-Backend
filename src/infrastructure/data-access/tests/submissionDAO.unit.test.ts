@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { PoolClient, QueryResultRow } from "pg";
 
-import Submission from "../../../entities/submission.js";
+import { Submission } from "../../../entities/index.js";
 
 const mockedClient = {
   query: jest.fn(),
@@ -12,7 +12,8 @@ await jest.unstable_mockModule("../client.js", () => ({
   default: mockedClient,
 }));
 
-const { default: SubmissionDAO } = await import("../submissionDAO.js");
+// const { default: SubmissionDAO } = await import("../submissionDAO.js");
+import SubmissionDAO from "../submissionDAO.js";
 
 type DbClient = Pick<PoolClient, "query">;
 
