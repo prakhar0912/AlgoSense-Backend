@@ -1,6 +1,5 @@
 import type { Problem } from '../../../entities/index.js';
 import type { ModelResponse } from '../../../interfaces/index.js';
-import "dotenv/config.js"
 import keys from "../../../config/app.js"
 
 const edgeCaseSystemPromptCreator = (problem: Problem, approachString: string) => {
@@ -160,6 +159,34 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
 
   let { systemPrompt, approachesStrings, edgeCases } = systemPromptCreator(problem)
   let models = ['nvidia/nemotron-3-super-120b-a12b:free', 'tencent/hy3:free', 'poolside/laguna-xs-2.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free']
+  if (keys.load_test_parameters.load_testing) {
+    return {
+      user_explanation_identified_apporach: 'Removal Simulation by Character',
+      user_explanation_rating: 'correct',
+      user_explanation_pass: true,
+      missing_points_in_user_explanation: 'none',
+      edge_cases: [
+        {
+          case: 'Deleting from a character that appears once removes that character from the remaining set entirely.',
+          importance: 'high',
+          tag: 'edge_case_0_coverage',
+          coverage: 'partial'
+        },
+        {
+          case: 'Multiple characters share the same count, so only one of them may be a valid deletion source.',
+          importance: 'medium',
+          tag: 'edge_case_1_coverage',
+          coverage: 'missing'
+        },
+        {
+          case: 'No simulated deletion produces uniform non-zero frequencies.',
+          importance: 'high',
+          tag: 'edge_case_2_coverage',
+          coverage: 'missing'
+        }
+      ]
+    }
+  }
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -299,7 +326,6 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
   const edgeCaseData = JSON.parse(edgeCaseRawData.choices[0].message.content);
 
   for (const [key, value] of Object.entries(edgeCaseData)) {
-
     for (const edgeCase of finalEdgeCaseData) {
       if (edgeCase.tag === key) {
         edgeCase.coverage = value as "correct" | "partial" | "incorrect" | "missing"

@@ -9,7 +9,7 @@ import SubmissionDAO from "../../infrastructure/data-access/submissionDAO.js";
 
 
 
-export default class SubmitSolution implements IUseCase<Submission> {
+export default class SubmitSolution implements IUseCase<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }> {
   constructor(
     private problemDAO: IProblemDAO,
     private askGPT: (systemPrompt: Problem, userInput: string) => Promise<ModelResponse>,
@@ -18,7 +18,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
     private progressNotifier?: INotifier
   ) { }
 
-  async call(userId: string, problemId: string, userInput: string, mcpServerContext?: ServerContext): Promise<Submission> {
+  async call(userId: string, problemId: string, userInput: string, mcpServerContext?: ServerContext): Promise<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }> {
 
     if (typeof userId !== "string" || typeof userId === "string" && userId.trim().length === 0) {
       throw new ValidationError('User ID value invalid')
@@ -83,7 +83,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
     }
     let validatedData: ModelResponse = data
 
-    console.log("Validated Model Response", validatedData)
+    // console.log("Validated Model Response", validatedData)
 
     let finalEdgeCaseData: Submission['edge_cases'] = []
     let earned = 0
@@ -107,7 +107,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
 
     const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
 
-    const submissionData: Submission | undefined = await runInTransaction<Submission>(async (client) => {
+    const result = await runInTransaction<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }>(async (client) => {
       const userDAO = new UserDAO(client)
       const submissionDAO = new SubmissionDAO(client)
       let user: User | null
@@ -182,13 +182,13 @@ export default class SubmitSolution implements IUseCase<Submission> {
         throw new InternalServerError('Failed to add submission to database', e)
       }
 
-      console.log('Final User Scores: ', {
-        approaches_score: mergedApproachScore,
-        edge_case_score: mergedEdgeCaseScore,
-        total_score: totalScore,
-        elo_rating: userEloRating + ratingChange,
-        topic_ratings: topicRatingsChange
-      })
+      // console.log('Final User Scores: ', {
+      //   approaches_score: mergedApproachScore,
+      //   edge_case_score: mergedEdgeCaseScore,
+      //   total_score: totalScore,
+      //   elo_rating: userEloRating + ratingChange,
+      //   topic_ratings: topicRatingsChange
+      // })
 
       let updatedUserScores: UserScores
       try {
@@ -217,13 +217,17 @@ export default class SubmitSolution implements IUseCase<Submission> {
         throw new InternalServerError('Unable to store new Submission Data to Database.')
       }
 
-      return submissionData
+      return {
+        submission: submissionData,
+        prevScores: user.scores,
+        newScores: updatedUserScores
+      }
 
     })
-    if (!submissionData) {
+    if (!result) {
       throw new InternalServerError("Failed to save submission to DB")
     }
-    return submissionData
+    return result
 
   }
 
@@ -233,7 +237,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
       0.25 * (edgeCaseScore / 100) +
       0.20 * (services.weights.problemDifficultyWeights[problem.difficulty as keyof typeof services.weights.problemDifficultyWeights] / 100)
 
-    console.log("User Performance: ", userPerformance)
+    // console.log("User Performance: ", userPerformance)
 
     let effectiveUserRating: number = 0.5 * userEloRating
 
@@ -266,10 +270,10 @@ export default class SubmitSolution implements IUseCase<Submission> {
     effectiveUserRating = Math.floor(effectiveUserRating)
 
 
-    console.log("Effective User Rating: ", effectiveUserRating)
+    // console.log("Effective User Rating: ", effectiveUserRating)
     const expectedUserPerformance = 1 / (1 + Math.pow(10, (problem.rating - effectiveUserRating) / 400))
 
-    console.log("Expected user performance: ", expectedUserPerformance)
+    // console.log("Expected user performance: ", expectedUserPerformance)
 
     let numberOfAttemptsModifier = 1
     if (numberOfAttempts >= services.weights.numberOfAttemptsModifier.maxNumber) {
@@ -279,7 +283,7 @@ export default class SubmitSolution implements IUseCase<Submission> {
       numberOfAttemptsModifier = services.weights.numberOfAttemptsModifier[numberOfAttempts as keyof typeof services.weights.numberOfAttemptsModifier]
     }
 
-    console.log("Attempt based modifier: ", numberOfAttemptsModifier)
+    // console.log("Attempt based modifier: ", numberOfAttemptsModifier)
 
     const ratingChange = numberOfAttemptsModifier * services.weights.elo_k_weight * (userPerformance - expectedUserPerformance)
     return ratingChange

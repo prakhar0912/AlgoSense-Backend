@@ -36,7 +36,7 @@ export async function runInTransaction<T>(work: (client: PoolClient) => Promise<
     await client.query("ROLLBACK").catch((e) => {
       throw new InternalServerError("Failed to rollback transaction", e)
     })
-    console.log("ROLLED BACK BABY")
+    console.log("ROLLED BACK BABY", error)
   }
   finally {
     client.release()

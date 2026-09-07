@@ -1,6 +1,7 @@
 import ZodValidator from "../validator.js";
 import { sanitize } from "isomorphic-dompurify";
 import z from 'zod'
+import { UserScores } from "../../../../entities/index.js";
 
 const updateUserValidator = z.object({
   first_name: z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)),
@@ -13,12 +14,12 @@ const updateUserValidator = z.object({
   scores: z.object({
     initial_elo_rating: z.number().min(1000).max(4000),
     elo_rating: z.number().min(1000).max(4000),
-    topic_ratings: z.object(),
-    approaches_score: z.literal(0),
+    topic_ratings: z.record(z.string(), z.number().min(0)),
+    approaches_score: z.number().min(0).max(100),
     days_logged_in: z.array(z.string().max(100, "Should be less than 100")),
-    consistency_score: z.literal(0),
-    edge_case_score: z.literal(0),
-    total_score: z.literal(0)
+    consistency_score: z.number().min(0).max(100),
+    edge_case_score: z.number().min(0).max(100),
+    total_score: z.number().min(0).max(100),
   }).partial().strict().nullable(),
   last_5_submissions: z.array(z.object({
     submission_id: z.string().max(500, "Must be less than 500 characters").transform((val) => sanitize(val)),

@@ -1,5 +1,5 @@
-import type Submission from "../../entities/submission.js";
-import type { IPaginated } from "../paginated.js";
+import type { Submission } from "../../entities/index.js";
+import type { IPaginated } from "../index.js";
 
 export interface ISubmissionDAO {
   create(submissionPayload: Partial<Submission>): Promise<Submission>;

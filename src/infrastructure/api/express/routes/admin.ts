@@ -22,10 +22,10 @@ const adminController = new AdminController(
   new ListUsers(userDAO),
   new RemoveUser(userDAO),
   new ToggleBanUser(userDAO),
-  new UpdateUser(userDAO, services.user.validators.updateUserValidator),
+  new UpdateUser(userDAO, services.user.validators.updateUser),
 
   services.user.validators.filterUsers,
-  services.user.validators.registerValidator,
+  services.user.validators.updateUser,
 )
 
 const problemController = new ProblemController(
@@ -128,6 +128,22 @@ router.delete('/problem/:id', checkPermission([services.permissions.admin.delete
 })
 
 
+router.put('/users/:userId', checkPermission([services.permissions.admin.updateUser]), async (req: Request<{ userId: string }>, res: Response, next: NextFunction) => {
+  const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
+  if (userId === undefined) {
+    throw new UnauthorizedError('User ID is required')
+  }
+  if (req.params.userId === undefined) {
+    throw new Error('Param User ID is required')
+  }
+  const id = String(req.params.userId)
+  const body = req.body
+  const success = await adminController.updateUserById({ userId, body, params: { id } })
+  res.send({ success })
+})
+
+
+
 router.get('/users', checkPermission([services.permissions.admin.viewUser]), async (req: Request, res: Response, next: NextFunction) => {
   const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
   if (userId === undefined) {
@@ -136,24 +152,6 @@ router.get('/users', checkPermission([services.permissions.admin.viewUser]), asy
   const { page, perPage } = req.query as unknown as { page: number; perPage: number }
   const result = await adminController.listFilteredUsers({ userId, params: { page, perPage }, body: req.body })
   res.send(result)
-})
-
-router.put('/users/:id', checkPermission([services.permissions.admin.updateUser]), async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const userId = (req as unknown as JwtRequest)?.auth?.payload.sub
-    if (userId === undefined) {
-      throw new UnauthorizedError('User ID is required')
-    }
-    if (req.params.id === undefined) {
-      throw new Error('User ID is required')
-    }
-    const id = String(req.params.id)
-    const body = req.body
-    const success = await adminController.updateUserById({ userId, body, params: { id } })
-    res.send({ success })
-  } catch (err) {
-    next(err)
-  }
 })
 
 router.delete('/users/:id', checkPermission([services.permissions.admin.deleteUser]), async (req: Request, res: Response, next: NextFunction) => {

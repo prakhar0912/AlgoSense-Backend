@@ -133,7 +133,7 @@ export default class UserController {
     return await this.findUserbyId.call(request.userId)
   }
 
-  async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: UserScores | null | undefined, newScores: UserScores }> {
+  async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: User['scores'], newScores: User['scores'] }> {
     //TODO: Reading User unnecessary times, make more efficient.
     if (!request.userId) {
       throw new ValidationError("userId not present")
@@ -143,14 +143,6 @@ export default class UserController {
       await this.mcpNotifier.notify(request.mcpServerContext, 1, 6, "🟢 Submitting your solution!")
     }
 
-    const user = await this.findUserbyId.call(request.userId)
-
-    if (user.scores === undefined) {
-      throw new InternalServerError("User Data malformed, please reach out to an admin")
-    }
-    if (!request.body || typeof request.body !== "object") {
-      throw new ValidationError('Request body is required')
-    }
     const body = request.body as { problem_id: string; userInput: string }
     if (!body.problem_id || typeof body.problem_id !== "string") {
       throw new ValidationError('Problem ID is not valid')
@@ -162,29 +154,25 @@ export default class UserController {
     if (this.mcpNotifier && request.mcpServerContext) {
       await this.mcpNotifier.notify(request.mcpServerContext, 2, 6, "🟢 Found your User Profile! Submitting your solution!")
     }
-    const result = await this.submitSolution.call(user.id, body.problem_id, body.userInput, request.mcpServerContext)
+    const result = await this.submitSolution.call(request.userId, body.problem_id, body.userInput, request.mcpServerContext)
     if (!result) {
       throw new InternalServerError("Didn't get good response from solution submitter")
     }
-    if (typeof result.approach_score !== "number" || typeof result.edge_case_score !== "number") {
+    if (typeof result?.submission?.approach_score !== "number" || typeof result?.submission?.edge_case_score !== "number") {
       throw new InternalServerError("Recieved malformed data from model response")
     }
 
     if (this.mcpNotifier && request.mcpServerContext) {
       await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Evaluvated your Solution! Getting your new Scores!")
     }
-    const newUser = await this.findUserbyId.call(user.id)
 
     if (this.mcpNotifier && request.mcpServerContext) {
       await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Got your fresh scores!")
     }
-    if (!newUser || !newUser.scores) {
-      throw new InternalServerError("Didn't get good response from solution submitter")
-    }
     return {
-      result,
-      prevScores: user.scores,
-      newScores: newUser.scores
+      result: result.submission,
+      prevScores: result.prevScores,
+      newScores: result.newScores
     }
   }
 

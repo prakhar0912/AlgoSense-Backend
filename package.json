@@ -25,6 +25,7 @@
     "@types/morgan": "^1.9.10",
     "@types/node": "^26.1.0",
     "@types/pg": "^8.20.0",
+    "auth0": "^6.3.0",
     "cheerio": "^1.2.0",
     "html-to-text": "^10.0.0",
     "jest": "^30.4.2",

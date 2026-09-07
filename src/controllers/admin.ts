@@ -110,7 +110,7 @@ export default class AdminController {
       throw new InternalServerError('Problem Data Validation Function Failed', e)
     }
     if (!validationResult.success || !validationResult.data || validationResult.errors) {
-      throw new ValidationError('Invalid User Data', validationResult.errors)
+      throw new ValidationError('Invalid User Data Controller', validationResult.errors)
     }
 
     const userId = request.params?.id

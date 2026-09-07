@@ -1,4 +1,4 @@
-import Problem from "../../entities/problem.js"
+import { Problem } from "../../entities/index.js"
 import type { IPaginated } from "../../interfaces/index.js"
 
 export interface IProblemDAO {

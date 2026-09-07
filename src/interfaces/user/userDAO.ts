@@ -1,7 +1,5 @@
-import type ShortSubmission from "../../entities/shortSubmission.js"
-import User from "../../entities/user.js"
-import type UserScores from "../../entities/userScores.js"
-import type { IPaginated } from "../paginated.js"
+import type { ShortSubmission, User, UserScores } from "../../entities/index.js"
+import type { IPaginated } from "../index.js"
 
 
 export interface IUserDAO {
