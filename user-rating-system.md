@@ -16,11 +16,19 @@
 	 4. The Problems ELO Rating
 
 We use the following formula's to calculate the probability:
-$Effective\:User\:Rating =0.5*User\:Elo\:Rating\\ + 0.3*Weighted\: Avg\:Primary\:Topics\:Rating\\+
-0.3*Weighted\: Avg\:Secondary\:Topics\:Rating$
+```math
+Effective\:User\:Rating =0.5*User\:Elo\:Rating
+```
+```math
++ 0.3*Weighted\: Avg\:Primary\:Topics\:Rating
+```
+```math
++ 0.3*Weighted\: Avg\:Secondary\:Topics\:Rating
+```
 
-$P(User \:Solves\:Problem) = \frac{1}{1+ 10^{\frac{Problem\:ELO - Effective\:User\:Rating}{400}}}$
-
+```math
+P(User\:Solves\:Problem) = \frac{1}{1+ 10^{\frac{Problem\:ELO - Effective\:User\:Rating}{400}}}
+```
 > Note: A deep dive into how and why this formula works in the later sections!
 
 
@@ -72,56 +80,76 @@ We now have all the judgement here, everything the AI responds with is alpha num
 
 With all this we now can calculate a **User Performance Score**:
 
-$User\:Performance = 0.55 * (Approach\:Score/100)\\+0.25 * (Edge Case Score/100)\\+0.2(Problem\:Difficulty\:Addition)$
-
+```math
+User\:Performance = 0.55 * (Approach\:Score/100)
+```
+```math
++0.25 * (Edge Case Score/100)
+```
+```math
++0.2(Problem\:Difficulty\:Addition)
+```
 
 ### Conclusion
 Using the below formula we can now calculate the rating change $(\Delta R)$ to apply to the User's ELO Rating and their Topic Ratings:
 
-$\Delta R = Number\:of\:Attempts\:Modifier * ELO\:Constant(K) \\*\:(User\:Performance - P(User \:Solves\:Problem))$
-
+```math
+\Delta R = Number\:of\:Attempts\:Modifier * ELO\:Constant(K) *\:(User\:Performance - P(User \:Solves\:Problem))
+```
 And we can modify the user's profile with some key indicators, these are less definitive and act as a general guide.
 
  1. Weighted Average Approach Score: Cumulative of all the user's solves based on the problems difficulty
  2. Weighted Average Edge Case Score: Cumulative of all the user's solves based on the problems difficulty.
- 3. $Total\:Score = 0.45 * Weighted\:Average\:Approach\:Score\\+0.35 * Weighted\:Average\:EdgeCase\:Score\\+0.20 * Consistency\:Score$
+ 3. Total Score:
+```math
+Total\:Score = 0.45 * Weighted\:Average\:Approach\:Score\\+0.35 * Weighted\:Average\:EdgeCase\:Score\\+0.20 * Consistency\:Score
+```
 
 ### How the ELO Probability Function works:
 First let's assume:
-
-$User\:Strength = U\\Problem\:Strength = P$
-
+```math
+User\:Strength = U\\Problem\:Strength = P
+```
 We will later prove that this model assumes this accurately to the real performance of the user and the difficulty of the problem respectively. Then,
-
-$P(User's\:Strength\:solves\:Problem's\:Strength) = \frac{U}{U+P}\:\:\:[Zermelo's\:Model]$
-
-$Odds\:of\:User's\:Strength\:solves\:Problem's\:Strength = \frac{U}{P}$
+```math
+P(User's\:Strength\:solves\:Problem's\:Strength) = \frac{U}{U+P}\:\:\:[Zermelo's\:Model]
+```
+```math
+Odds\:of\:User's\:Strength\:solves\:Problem's\:Strength = \frac{U}{P}
+```
 
 Zermelo's model doesn't have any justification for the above formula, but it's been taken as a given and as we has prove $U$ and $P$ to match their qualities, we choose to move forward. Now,
-
-$log_{10}(Odds\:of\:User\:Solving) = log_{10}(U/P) = log_{10}(U) - log_{10}(P)$
-
-$Odds\:of\:User\:Solving = 10^{log_{10}(U) - log_{10}(P)}$
-
+```math
+log_{10}(Odds\:of\:User\:Solving) = log_{10}(U/P) = log_{10}(U) - log_{10}(P)
+```
+```math
+Odds\:of\:User\:Solving = 10^{log_{10}(U) - log_{10}(P)}
+```
 Using,
-$Probability = \frac{1}{1+\frac{1}{Odds}}$
-
+```math
+Probability = \frac{1}{1+\frac{1}{Odds}}
+```
 We get,
-$P(User \:Solves\:Problem) = \frac{1}{1+ 10^{ log_{10}(U) - log_{10}(P)}}$
-
+```math
+P(User \:Solves\:Problem) = \frac{1}{1+ 10^{ log_{10}(U) - log_{10}(P)}}
+```
 Now just multiplying using arbitary constants to get neater numbers in practice we get,
-
-$P(User \:Solves\:Problem) = \frac{1}{1+ 10^{\frac{400log_{10}(U) - 400log_{10}(P)}{400}}}$
-
+```math
+P(User \:Solves\:Problem) = \frac{1}{1+ 10^{\frac{400log_{10}(U) - 400log_{10}(P)}{400}}}
+```
 Now we suppose,
-$R_u = User\:Rating = 400log_{10}(U)\\R_p = Problem\:Rating = 400log_{10}(P)$
-
+```math
+R_u = User\:Rating = 400log_{10}(U)
+```
+```math
+R_p = Problem\:Rating = 400log_{10}(P)
+```
 Therefore, we reach the final form of the Probability equation,
-
-$P(User \:Solves\:Problem) = \frac{1}{1+ 10^{\frac{Problem\:ELO - Effective\:User\:Rating}{400}}}$
-
-In the Zermelo Model **there exist correct ratings** such that, when those ratings are assigned to a user and a problem, the ELO **probability function produces the correct probabilities**. So we have to verify that the update algorithm of this model produces those correct ratings. The proof of the convergence of these ratings to those correct ratings is out of the scope of this explanation but has been proved time and time again, here are some references to the extended proof:
-[Convergence analysis of a family of Zermelo-type iterations for the Bradley--Terry model](https://arxiv.org/abs/2607.22221)
+```math
+P(User \:Solves\:Problem) = \frac{1}{1+ 10^{\frac{Problem\:ELO - Effective\:User\:Rating}{400}}}
+```
+In the Zermelo Model **there exist correct ratings** such that, when those ratings are assigned to a user and a problem, the ELO **probability function produces the correct probabilities**. So we have to verify that the update algorithm of this model produces those correct ratings. The proof of the convergence of these ratings to those correct ratings is out of the scope of this explanation but has been proved time and time again, here are some references to the extended proof:  
+[Convergence analysis of a family of Zermelo-type iterations for the Bradley--Terry model](https://arxiv.org/abs/2607.22221)  
 [Zermelo Model Convergence](https://www.youtube.com/watch?v=inXUp5j107I)
 
 > Bit of history trivia: We commonly call this the ELO rating system, but the actual ELO rating system(by Élő Árpád Imre) uses a completely different probability function, it assumes Strengths to fall in a normal distribution, but as it is computationally difficult to compute that we use the Zermelo model but still call it the ELO model!
