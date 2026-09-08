@@ -36,3 +36,6 @@ For update DTOs, use a separate TypeScript type such as `Partial<User>` at the p
 Concurency tests showed flaws in the implementation of submitSolution use case.
 We were loading the users scores just for display before locking the row, then locking the user's row, rereading the user's scores freshly, calculating the updates, and then comitting them, then making another call to get the fresh updated scores and displaying them as the new scores.
 We were fetching the user's data 3 times, reduced that to 1 time, that is the only time and the lock on the user's row is placed in that call and making the use case return back the original scores and the fresh updated scores.
+
+
+Pivoting to a job queue for handling the long running AI evaluation.

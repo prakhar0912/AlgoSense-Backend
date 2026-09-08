@@ -6,6 +6,8 @@ Use cases will be responsible for checking if the input data is in the valid ran
 i.e. if a use case requires a string of length 10, we will reject if the string is not of length 10.
 
 
+Managed race conditions using an independent transaction runner.
+Now pivoting to using a job queue to handle the submitSolution(AI evaluation) step, so gonna change a bunch of stuff.
 
 
 

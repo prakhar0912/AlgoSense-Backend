@@ -1,6 +1,5 @@
 import zod from 'zod'
-import type { IValidator } from '../../../interfaces/index.js';
-import type { IValidatorResult } from '../../../interfaces/validator.js';
+import type { IValidator, IValidatorResult } from '../../../interfaces/index.js';
 import { clearWindow } from "isomorphic-dompurify";
 
 

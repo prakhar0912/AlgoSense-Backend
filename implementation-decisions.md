@@ -93,3 +93,10 @@ We are moving user authentication and authorization into the implementation laye
 - Every controller function should receive an `IRequest` that already contains the validated `userId`.
 - Controllers should use that `userId` directly instead of performing token parsing or Auth0 validation themselves.
 - `IRequest` should represent the already authenticated request context, not the raw authentication mechanism.
+
+Moving from race condition imune SubmitSolution usecase to job queue architecture
+1. Previous implementation flaws: The REST API directly called the AI provider while handling the user's HTTP request. This meant requests stayed open for several seconds, API performance was tied to AI latency/availability, traffic spikes could overwhelm the AI provider, and failures/retries were harder to handle reliably. It also tightly coupled submission handling with AI evaluation and Elo updates.
+
+2. New architecture: The REST API now saves the submission to PostgreSQL with a pending status, adds a lightweight { submissionId } job to a queue such as Redis/BullMQ, and immediately returns the submissionId to the client. A separate AI worker consumes the job, loads the submission, calls the AI provider, validates the result, calculates scores, updates the submission, and performs the Elo transaction. The client polls GET /submissions/:id until the status becomes evaluated.
+
+3. Why it's better: The API remains fast and responsive regardless of AI latency, while the queue absorbs traffic spikes and allows you to control AI concurrency. Workers can retry failed AI requests and scale independently from the API. Most importantly, it gives you a reliable place to handle evaluation and transactional Elo updates, making the system more resilient, scalable, and much easier to load-test.
