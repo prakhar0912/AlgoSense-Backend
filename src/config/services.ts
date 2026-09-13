@@ -3,6 +3,7 @@ import UserDAO from '../infrastructure/data-access/userDAO.js'
 import SubmissionDAO from '../infrastructure/data-access/submissionDAO.js'
 
 import * as validators from '../infrastructure/validation/zod/index.js'
+import { evaluationQueue } from '../infrastructure/queue/bullmq/evaluationQueue.js'
 
 import askGPT from '../infrastructure/utils/logic/askGPT.js'
 import getConsistencyScore from '../infrastructure/utils/logic/getConsistencyScore.js'
@@ -20,6 +21,9 @@ export default {
   },
   submission: {
     DAO: SubmissionDAO,
+  },
+  queue: {
+    evaluationQueue: evaluationQueue
   },
   utils: {
     askGPT,

@@ -2,11 +2,14 @@ import type { Submission } from "../../entities/index.js";
 import type { IPaginated } from "../index.js";
 
 export interface ISubmissionDAO {
-  create(submissionPayload: Partial<Submission>): Promise<Submission>;
+  findById(userId: string, submissionId: string): Promise<Required<Submission> | null>
+  createInitial(initialSubmissionPayload: Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used'>): Promise<Pick<Submission, 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id' | 'timer' | 'status'>>
+  createFinalSubmission(submissionPayload: Partial<Submission>): Promise<Submission>;
   viewById(submissionId: string): Promise<Submission | null>;
   viewByUser(userId: string): Promise<IPaginated<Submission>>;
-  viewScoresByUser(userId: string): Promise<Pick<Submission, 'problem_id' | 'difficulty' | 'approach_score' | 'edge_case_score' | 'submitted_at'>[]>;
+  viewScoresByUser(userId: string): Promise<Pick<Required<Submission>, 'problem_id' | 'difficulty' | 'approach_score' | 'edge_case_score' | 'submitted_at'>[]>;
   viewNumberOfSubmissionsPerUserPerProblem(userId: string, problemId: string): Promise<number> // Find and return the number of rows/entries from the "submissions" table, for a specific "user_id" provided as the argument "userId" and a specific "problem_id" provided as the argument "problemId". 
+  updateStatus(submissionId: string, status: Submission['status']): Promise<Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>>
 }
 
 // id uuid NOT NULL DEFAULT uuidv7(),

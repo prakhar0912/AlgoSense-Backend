@@ -11,7 +11,7 @@ const configExports = {
     port: Number(process.env.MCP_PORT)
   },
   load_test_parameters: {
-    load_testing: Boolean(process.env.LOAD_TEST),
+    load_testing: String(process.env.LOAD_TEST) === 'true' ? true : false,
     clientId: String(process.env.CLIENTID),
     domain: String(process.env.DOMAIN),
     clientSecret: String(process.env.CLIENTSECRET),

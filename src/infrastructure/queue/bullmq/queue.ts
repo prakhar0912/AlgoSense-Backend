@@ -1,13 +1,13 @@
-import { Queue } from "bullmq"
+import type { Queue } from "bullmq"
 import type { IJobQueue, IJobDetails } from "../../../interfaces/index.js"
 import InternalServerError from "../../../errors/internalServerError.js"
 
-class BullMqQueue<T> implements IJobQueue<T> {
+export class BullMqQueue<T> implements IJobQueue<T> {
   constructor(protected bullmqQueue: Queue) { }
-  async addJob(entry: T): Promise<IJobDetails<T>> {
+  async addJob(jobName: string, entry: T): Promise<IJobDetails<T>> {
     let job
     try {
-      job = await this.bullmqQueue.add('ai-evaluation-job', { entry })
+      job = await this.bullmqQueue.add(jobName, entry)
     }
     catch (e) {
       throw new InternalServerError("Failed to submit the job to the job queue", e)
@@ -21,13 +21,3 @@ class BullMqQueue<T> implements IJobQueue<T> {
     }
   }
 }
-
-const AIEvaluationQueue: Queue = new Queue('ai-evaluation-queue', {
-  connection: {
-    host: 'localhost',
-    port: 6379
-  }
-})
-
-export default new BullMqQueue<string>(AIEvaluationQueue)
-

@@ -9,7 +9,8 @@ import UpdateConsistencyScore from "./updateConsistencyScore.js";
 import UpdateUserScore from "./updateUserScore.js";
 import UpdateUserProfile from "./updateUserSettings.js";
 import RegisterUser from "./register.js";
-import GetSubmissionsById from "./getSubmissionsById.js";
+import GetUserSubmissionsByUserId from "./getUserSubmissionsByUserId.js";
+import GetSubmissionById from './getSubmissionById.js'
 
 export {
   DeleteUser,
@@ -23,5 +24,6 @@ export {
   UpdateUserScore,
   UpdateUserProfile,
   RegisterUser,
-  GetSubmissionsById,
+  GetUserSubmissionsByUserId,
+  GetSubmissionById
 }

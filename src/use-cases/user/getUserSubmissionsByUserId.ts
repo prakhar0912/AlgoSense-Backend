@@ -4,7 +4,7 @@ import type { Submission } from "../../entities/index.js";
 
 
 
-export default class GetSubmissionsById implements IUseCase<IPaginated<Submission>> {
+export default class GetUserSubmissionsByUserId implements IUseCase<IPaginated<Submission>> {
   constructor(
     private submissionDAO: ISubmissionDAO
   ) { }

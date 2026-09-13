@@ -6,7 +6,7 @@ import path from "node:path";
 
 import UserController from '../../../controllers/user.js'
 import services from '../../../config/services.js'
-import { GetSubmissionsById, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../use-cases/user/index.js'
+import { GetSubmissionById, GetUserSubmissionsByUserId, UpdateUserProfile, RegisterUser, DeleteUser, FindUserbyId, SubmitSolution, UpdateConsistencyScore, UpdateUserScore } from '../../../use-cases/user/index.js'
 import UnauthorizedError from '../../../errors/unauthorizedError.js'
 import requireScope from "../../utils/auth/auth0/mcpAuthorization.js";
 import InternalServerError from "../../../errors/internalServerError.js";
@@ -22,12 +22,14 @@ const submissionDAO = new services.submission.DAO()
 const userController = new UserController(
   new FindUserbyId(userDAO),
   new DeleteUser(userDAO),
-  new SubmitSolution(problemDAO, services.utils.askGPT, services.problem.validators.modelResponseValidator, services.problem.validators.problemSolutionValidator, services.user.notifier),
+  new SubmitSolution(problemDAO, submissionDAO, services.problem.validators.problemSolutionValidator, services.queue.evaluationQueue),
+
   new UpdateConsistencyScore(),
   new UpdateUserScore(userDAO),
   new UpdateUserProfile(userDAO, services.user.validators.updateUser),
   new RegisterUser(userDAO, services.user.validators.registerValidator),
-  new GetSubmissionsById(submissionDAO),
+  new GetSubmissionById(submissionDAO),
+  new GetUserSubmissionsByUserId(submissionDAO),
 
   services.user.validators.updateUser,
 

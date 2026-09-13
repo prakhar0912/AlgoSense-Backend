@@ -2,6 +2,7 @@ import { Problem } from "../../entities/index.js"
 import type { IPaginated } from "../../interfaces/index.js"
 
 export interface IProblemDAO {
+  checkExistanceById(problemId: string): Promise<Boolean | null>
   create(problemData: Partial<Problem>): Promise<Problem>
   update(problemId: string, payload: Partial<Problem>): Promise<Problem>
   delete(problemId: string): Promise<boolean>

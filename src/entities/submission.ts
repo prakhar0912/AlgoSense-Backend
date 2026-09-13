@@ -3,20 +3,21 @@ export class Submission {
   id!: string
   user_id!: string
   problem_id!: string
-  problem_title!: string
-  difficulty!: "easy" | "medium" | "hard" | "expert"
-  problem_rating!: number
+  problem_title?: string
+  difficulty?: "easy" | "medium" | "hard" | "expert"
+  problem_rating?: number
   user_input!: string
   hints_used!: string[] | []
   timer?: number | null
-  approach_score!: number
-  identified_approach!: string | ""
-  pass!: boolean
-  missing_points!: string
-  edge_cases!: { description: string, importance: "critical" | "high" | "medium" | "low", coverage: "correct" | "partial" | "incorrect" | "missing" }[] | []
-  edge_case_score!: number
-  submitted_at!: string
-  elo_diff!: number
+  approach_score?: number
+  identified_approach?: string | ""
+  pass?: boolean
+  missing_points?: string
+  edge_cases?: { description: string, importance: "critical" | "high" | "medium" | "low", coverage: "correct" | "partial" | "incorrect" | "missing" }[] | []
+  edge_case_score?: number
+  submitted_at?: string
+  elo_diff?: number
+  status!: "pending" | "evaluating" | "completed"
 }
 
 

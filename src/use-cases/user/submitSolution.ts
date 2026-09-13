@@ -1,24 +1,22 @@
 import { type Problem, type Submission, type UserScores, type User, ShortSubmission } from "../../entities/index.js";
 import { InternalServerError, NotFoundError, ValidationError, UnauthorizedError } from "../../errors/index.js";
-import type { IUseCase, IProblemDAO, IValidatorResult, IValidator, ModelResponse, INotifier } from "../../interfaces/index.js";
+import type { IJobQueue, IUseCase, IProblemDAO, ISubmissionDAO, IValidatorResult, IValidator, ModelResponse, INotifier, IJobDetails } from "../../interfaces/index.js";
 import services from "../../config/services.js";
 import type { ServerContext } from "@modelcontextprotocol/server";
-import { runInTransaction } from "../../infrastructure/data-access/client.js";
-import UserDAO from "../../infrastructure/data-access/userDAO.js";
 import SubmissionDAO from "../../infrastructure/data-access/submissionDAO.js";
 
 
 
-export default class SubmitSolution implements IUseCase<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }> {
+export default class SubmitSolution implements IUseCase<{ submission_id: string | undefined }> {
   constructor(
     private problemDAO: IProblemDAO,
-    private askGPT: (systemPrompt: Problem, userInput: string) => Promise<ModelResponse>,
-    private submissionValidator: IValidator<ModelResponse>,
+    private submissionDAO: ISubmissionDAO,
     private userSolutionValidator: IValidator<string>,
+    protected evaluationQueue: IJobQueue<string>,
     private progressNotifier?: INotifier
   ) { }
 
-  async call(userId: string, problemId: string, userInput: string, mcpServerContext?: ServerContext): Promise<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }> {
+  async call(userId: string, problemId: string, userInput: string, mcpServerContext?: ServerContext): Promise<{ submission_id: string | undefined }> {
 
     if (typeof userId !== "string" || typeof userId === "string" && userId.trim().length === 0) {
       throw new ValidationError('User ID value invalid')
@@ -40,14 +38,14 @@ export default class SubmitSolution implements IUseCase<{ submission: Submission
 
 
 
-    let problem: Problem | null | undefined
+    let problemExists: Boolean | null
     try {
-      problem = await this.problemDAO.findById(problemId)
+      problemExists = await this.problemDAO.checkExistanceById(problemId)
     }
     catch (e) {
       throw new InternalServerError('Error while fetching problem from DB')
     }
-    if (!problem) {
+    if (!problemExists) {
       throw new NotFoundError('Problem not found in DB')
     }
 
@@ -56,178 +54,209 @@ export default class SubmitSolution implements IUseCase<{ submission: Submission
       await this.progressNotifier.notify(mcpServerContext, 3, 6, "🟢 Calculating Scores and Metrics")
     }
 
-    let modelResp
+    let submissionData: Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>
     try {
-      modelResp = await this.askGPT(problem, validatedUserInput.data)
+      submissionData = await this.submissionDAO.createInitial({
+        user_id: userId,
+        problem_id: problemId,
+        user_input: userInput,
+        hints_used: [],
+        submitted_at: new Date().toISOString(),
+        timer: null,
+        status: "pending"
+      })
     }
     catch (e) {
-      throw new InternalServerError('Error while fetching response from model', e)
+      throw new InternalServerError('Failed to add submission to database', e)
+    }
+    if (!submissionData.id) {
+      throw new InternalServerError('Failed to add submission to database')
     }
 
-    let validatedModelResp: IValidatorResult<ModelResponse>
+
+    let jobDetails: IJobDetails<string>
     try {
-      validatedModelResp = this.submissionValidator.validate(modelResp)
+      jobDetails = await this.evaluationQueue.addJob('submission-evaluation-job', submissionData.id)
     }
     catch (e) {
-      throw new InternalServerError('Error while validating model response')
+      throw new InternalServerError("Error when trying to submit job", e)
     }
 
-    const { data, errors } = validatedModelResp
-    if (errors && errors.length > 0 || !data) {
-      throw new InternalServerError('The model responded incorrectly', errors)
-    }
+    return { submission_id: jobDetails.body }
 
 
-    if (this.progressNotifier && mcpServerContext) {
-      await this.progressNotifier.notify(mcpServerContext, 4, 6, "🟢 Got your solution scores!")
-    }
-    let validatedData: ModelResponse = data
-
-    // console.log("Validated Model Response", validatedData)
-
-    let finalEdgeCaseData: Submission['edge_cases'] = []
-    let earned = 0
-    let max = 0
-
-    for (const edgeCase of validatedData.edge_cases) {
-      max += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
-      earned += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[edgeCase.coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
-
-      finalEdgeCaseData.push({
-        description: edgeCase.case,
-        coverage: edgeCase.coverage,
-        importance: edgeCase.importance,
-      } as never)
-    }
-
-    let edgeCaseScore = 100
-    if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
-      edgeCaseScore = Math.ceil((earned / max) * 100)
-    }
-
-    const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
-
-    const result = await runInTransaction<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }>(async (client) => {
-      const userDAO = new UserDAO(client)
-      const submissionDAO = new SubmissionDAO(client)
-      let user: User | null
-      try {
-        user = await userDAO.findByIdForUpdate(userId)
-      }
-      catch (e) {
-        throw new InternalServerError('Unable to fetch user from DB.', e)
-      }
-      if (!user) {
-        throw new UnauthorizedError('AlgoSense account not found!')
-      }
-      const {
-        mergedApproachScore,
-        mergedEdgeCaseScore,
-        totalScore,
-        numberOfAttempts
-      } = await this.calculateNewUserScores(userId, user.scores, problem.id, finalApproachScore, edgeCaseScore, problem.difficulty, submissionDAO)
-
-      let userEloRating: number | undefined = Number.isNaN(user.scores?.elo_rating) ? user.scores?.initial_elo_rating : user.scores?.elo_rating
-      if (Number.isNaN(userEloRating) || !userEloRating) {
-        userEloRating = 1500
-      }
-
-      const ratingChange = this.calculateRatingChange(problem, userEloRating, user.scores, finalApproachScore, edgeCaseScore, numberOfAttempts)
-
-      console.log("Rating Change: ", ratingChange)
-      if (Number.isNaN(ratingChange)) {
-        throw new InternalServerError('Rating Change value is not a number')
-      }
-
-
-      let topicRatingsChange: Record<string, number> = {}
-      for (const topic of problem.primary_topics) {
-        if (user.scores?.topic_ratings && Object.hasOwn(user.scores?.topic_ratings, topic)) {
-          topicRatingsChange[topic as keyof typeof user.scores.topic_ratings] =
-            user.scores.topic_ratings[topic as keyof typeof user.scores.topic_ratings] === 0 ?
-              userEloRating + ratingChange :
-              user.scores.topic_ratings[topic as keyof typeof user.scores.topic_ratings] + ratingChange
-        }
-      }
-      for (const topic of problem.secondary_topics) {
-        if (user.scores?.topic_ratings && Object.hasOwn(user.scores?.topic_ratings, topic)) {
-          topicRatingsChange[topic as keyof typeof user.scores.topic_ratings] =
-            user.scores?.topic_ratings[topic as keyof typeof user.scores.topic_ratings] === 0 ?
-              userEloRating + 0.5 * ratingChange :
-              user.scores?.topic_ratings[topic as keyof typeof user.scores.topic_ratings] + 0.5 * ratingChange
-        }
-      }
-
-
-      let submissionData: Submission
-      try {
-        submissionData = await submissionDAO.create({
-          user_id: userId,
-          problem_id: problemId,
-          user_input: userInput,
-          problem_title: problem.title,
-          difficulty: problem.difficulty,
-          problem_rating: problem.rating,
-          approach_score: finalApproachScore,
-          identified_approach: validatedData.user_explanation_identified_apporach,
-          pass: validatedData.user_explanation_pass,
-          missing_points: validatedData.missing_points_in_user_explanation,
-          edge_cases: finalEdgeCaseData,
-          edge_case_score: edgeCaseScore,
-          submitted_at: new Date().toISOString(),
-          elo_diff: ratingChange,
-        })
-      }
-      catch (e) {
-        throw new InternalServerError('Failed to add submission to database', e)
-      }
-
-      // console.log('Final User Scores: ', {
-      //   approaches_score: mergedApproachScore,
-      //   edge_case_score: mergedEdgeCaseScore,
-      //   total_score: totalScore,
-      //   elo_rating: userEloRating + ratingChange,
-      //   topic_ratings: topicRatingsChange
-      // })
-
-      let updatedUserScores: UserScores
-      try {
-        updatedUserScores = await userDAO.setUserScores(userId, {
-          approaches_score: mergedApproachScore,
-          edge_case_score: mergedEdgeCaseScore,
-          total_score: totalScore,
-          elo_rating: userEloRating + ratingChange,
-          topic_ratings: topicRatingsChange
-        })
-      }
-      catch (e) {
-        throw new InternalServerError('Unable to store new Scores.')
-      }
-
-
-      let last5submissions = user.last_5_submissions && Array.isArray(user.last_5_submissions) ? user.last_5_submissions : []
-
-      const newestToOldest = this.buildNewLast5Submissions(submissionData, last5submissions)
-
-      let updatedShortSubmissions: ShortSubmission[]
-      try {
-        updatedShortSubmissions = await userDAO.setSubmissionsInProfile(userId, newestToOldest)
-      }
-      catch (e) {
-        throw new InternalServerError('Unable to store new Submission Data to Database.')
-      }
-
-      return {
-        submission: submissionData,
-        prevScores: user.scores,
-        newScores: updatedUserScores
-      }
-
-    })
-    if (!result) {
-      throw new InternalServerError("Failed to save submission to DB")
-    }
-    return result
+    // let modelResp
+    // try {
+    //   modelResp = await this.askGPT(problem, validatedUserInput.data)
+    // }
+    // catch (e) {
+    //   throw new InternalServerError('Error while fetching response from model', e)
+    // }
+    //
+    // let validatedModelResp: IValidatorResult<ModelResponse>
+    // try {
+    //   validatedModelResp = this.submissionValidator.validate(modelResp)
+    // }
+    // catch (e) {
+    //   throw new InternalServerError('Error while validating model response')
+    // }
+    //
+    // const { data, errors } = validatedModelResp
+    // if (errors && errors.length > 0 || !data) {
+    //   throw new InternalServerError('The model responded incorrectly', errors)
+    // }
+    //
+    //
+    // if (this.progressNotifier && mcpServerContext) {
+    //   await this.progressNotifier.notify(mcpServerContext, 4, 6, "🟢 Got your solution scores!")
+    // }
+    // let validatedData: ModelResponse = data
+    //
+    // // console.log("Validated Model Response", validatedData)
+    //
+    // let finalEdgeCaseData: Submission['edge_cases'] = []
+    // let earned = 0
+    // let max = 0
+    //
+    // for (const edgeCase of validatedData.edge_cases) {
+    //   max += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
+    //   earned += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[edgeCase.coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
+    //
+    //   finalEdgeCaseData.push({
+    //     description: edgeCase.case,
+    //     coverage: edgeCase.coverage,
+    //     importance: edgeCase.importance,
+    //   } as never)
+    // }
+    //
+    // let edgeCaseScore = 100
+    // if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
+    //   edgeCaseScore = Math.ceil((earned / max) * 100)
+    // }
+    //
+    // const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
+    //
+    // const result = await runInTransaction<{ submission: Submission | undefined, prevScores: UserScores | undefined, newScores: UserScores | undefined }>(async (client) => {
+    //   const userDAO = new UserDAO(client)
+    //   const submissionDAO = new SubmissionDAO(client)
+    //   let user: User | null
+    //   try {
+    //     user = await userDAO.findByIdForUpdate(userId)
+    //   }
+    //   catch (e) {
+    //     throw new InternalServerError('Unable to fetch user from DB.', e)
+    //   }
+    //   if (!user) {
+    //     throw new UnauthorizedError('AlgoSense account not found!')
+    //   }
+    //   const {
+    //     mergedApproachScore,
+    //     mergedEdgeCaseScore,
+    //     totalScore,
+    //     numberOfAttempts
+    //   } = await this.calculateNewUserScores(userId, user.scores, problem.id, finalApproachScore, edgeCaseScore, problem.difficulty, submissionDAO)
+    //
+    //   let userEloRating: number | undefined = Number.isNaN(user.scores?.elo_rating) ? user.scores?.initial_elo_rating : user.scores?.elo_rating
+    //   if (Number.isNaN(userEloRating) || !userEloRating) {
+    //     userEloRating = 1500
+    //   }
+    //
+    //   const ratingChange = this.calculateRatingChange(problem, userEloRating, user.scores, finalApproachScore, edgeCaseScore, numberOfAttempts)
+    //
+    //   console.log("Rating Change: ", ratingChange)
+    //   if (Number.isNaN(ratingChange)) {
+    //     throw new InternalServerError('Rating Change value is not a number')
+    //   }
+    //
+    //
+    //   let topicRatingsChange: Record<string, number> = {}
+    //   for (const topic of problem.primary_topics) {
+    //     if (user.scores?.topic_ratings && Object.hasOwn(user.scores?.topic_ratings, topic)) {
+    //       topicRatingsChange[topic as keyof typeof user.scores.topic_ratings] =
+    //         user.scores.topic_ratings[topic as keyof typeof user.scores.topic_ratings] === 0 ?
+    //           userEloRating + ratingChange :
+    //           user.scores.topic_ratings[topic as keyof typeof user.scores.topic_ratings] + ratingChange
+    //     }
+    //   }
+    //   for (const topic of problem.secondary_topics) {
+    //     if (user.scores?.topic_ratings && Object.hasOwn(user.scores?.topic_ratings, topic)) {
+    //       topicRatingsChange[topic as keyof typeof user.scores.topic_ratings] =
+    //         user.scores?.topic_ratings[topic as keyof typeof user.scores.topic_ratings] === 0 ?
+    //           userEloRating + 0.5 * ratingChange :
+    //           user.scores?.topic_ratings[topic as keyof typeof user.scores.topic_ratings] + 0.5 * ratingChange
+    //     }
+    //   }
+    //
+    //
+    //   let submissionData: Submission
+    //   try {
+    //     submissionData = await submissionDAO.create({
+    //       user_id: userId,
+    //       problem_id: problemId,
+    //       user_input: userInput,
+    //       problem_title: problem.title,
+    //       difficulty: problem.difficulty,
+    //       problem_rating: problem.rating,
+    //       approach_score: finalApproachScore,
+    //       identified_approach: validatedData.user_explanation_identified_apporach,
+    //       pass: validatedData.user_explanation_pass,
+    //       missing_points: validatedData.missing_points_in_user_explanation,
+    //       edge_cases: finalEdgeCaseData,
+    //       edge_case_score: edgeCaseScore,
+    //       submitted_at: new Date().toISOString(),
+    //       elo_diff: ratingChange,
+    //     })
+    //   }
+    //   catch (e) {
+    //     throw new InternalServerError('Failed to add submission to database', e)
+    //   }
+    //
+    //   // console.log('Final User Scores: ', {
+    //   //   approaches_score: mergedApproachScore,
+    //   //   edge_case_score: mergedEdgeCaseScore,
+    //   //   total_score: totalScore,
+    //   //   elo_rating: userEloRating + ratingChange,
+    //   //   topic_ratings: topicRatingsChange
+    //   // })
+    //
+    //   let updatedUserScores: UserScores
+    //   try {
+    //     updatedUserScores = await userDAO.setUserScores(userId, {
+    //       approaches_score: mergedApproachScore,
+    //       edge_case_score: mergedEdgeCaseScore,
+    //       total_score: totalScore,
+    //       elo_rating: userEloRating + ratingChange,
+    //       topic_ratings: topicRatingsChange
+    //     })
+    //   }
+    //   catch (e) {
+    //     throw new InternalServerError('Unable to store new Scores.')
+    //   }
+    //
+    //
+    //   let last5submissions = user.last_5_submissions && Array.isArray(user.last_5_submissions) ? user.last_5_submissions : []
+    //
+    //   const newestToOldest = this.buildNewLast5Submissions(submissionData, last5submissions)
+    //
+    //   let updatedShortSubmissions: ShortSubmission[]
+    //   try {
+    //     updatedShortSubmissions = await userDAO.setSubmissionsInProfile(userId, newestToOldest)
+    //   }
+    //   catch (e) {
+    //     throw new InternalServerError('Unable to store new Submission Data to Database.')
+    //   }
+    //
+    //   return {
+    //     submission: submissionData,
+    //     prevScores: user.scores,
+    //     newScores: updatedUserScores
+    //   }
+    //
+    // })
+    // if (!result) {
+    //   throw new InternalServerError("Failed to save submission to DB")
+    // }
+    // return result
 
   }
 
@@ -333,7 +362,7 @@ export default class SubmitSolution implements IUseCase<{ submission: Submission
     return { mergedApproachScore, mergedEdgeCaseScore, totalScore, numberOfAttempts }
   }
 
-  buildNewLast5Submissions(submissionData: Submission, last5submissions: ShortSubmission[]) {
+  buildNewLast5Submissions(submissionData: Required<Submission>, last5submissions: ShortSubmission[]) {
 
     let newestToOldest = [...last5submissions].sort((a, b) => b.submitted_at.localeCompare(a.submitted_at));
 

@@ -4,5 +4,5 @@ export interface IJobDetails<T> {
 }
 
 export interface IJobQueue<T> {
-  addJob(entry: T): Promise<IJobDetails<T>>
+  addJob(jobName: string, entry: T): Promise<IJobDetails<T>>
 }

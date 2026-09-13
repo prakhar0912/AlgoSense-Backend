@@ -160,6 +160,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
   let { systemPrompt, approachesStrings, edgeCases } = systemPromptCreator(problem)
   let models = ['nvidia/nemotron-3-super-120b-a12b:free', 'tencent/hy3:free', 'poolside/laguna-xs-2.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free']
   if (keys.load_test_parameters.load_testing) {
+    console.log("in test")
     return {
       user_explanation_identified_apporach: 'Removal Simulation by Character',
       user_explanation_rating: 'correct',

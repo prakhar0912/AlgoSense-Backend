@@ -1,4 +1,4 @@
-import type { Submission, User, UserScores } from "../entities/index.js";
+import type { User } from "../entities/index.js";
 import { InternalServerError, ValidationError } from "../errors/index.js";
 import type { IRequest, IValidator, INotifier } from "../interfaces/index.js";
 
@@ -10,7 +10,8 @@ import type {
   UpdateUserScore,
   UpdateUserProfile,
   RegisterUser,
-  GetSubmissionsById,
+  GetUserSubmissionsByUserId,
+  GetSubmissionById,
 } from "../use-cases/user/index.js"
 
 
@@ -32,10 +33,10 @@ export default class UserController {
     protected updateUserScore: UpdateUserScore,
     protected updateUserSettings: UpdateUserProfile,
     protected createUser: RegisterUser,
-    protected getSubmissionsById: GetSubmissionsById,
+    protected getSubmissionById: GetSubmissionById,
+    protected getUserSubmissionsByUserId: GetUserSubmissionsByUserId,
     // Validators
     protected profileDataValidator: IValidator<UserSettingsValues | null | undefined>,
-
     protected mcpNotifier?: INotifier
   ) { }
 
@@ -60,9 +61,22 @@ export default class UserController {
     if (!request.userId) {
       throw new ValidationError("userId not present")
     }
-    return await this.getSubmissionsById.call(request.userId)
+    return await this.getUserSubmissionsByUserId.call(request.userId)
 
   }
+
+  async getSubmission(request: IRequest) {
+    if (!request.userId) {
+      throw new ValidationError("userId not present")
+    }
+    const submissionId = request?.params?.submissionId
+    if (typeof submissionId !== "string" || typeof submissionId === "string" && submissionId.length === 0) {
+      throw new ValidationError('Please provide a submission_id')
+    }
+    return await this.getSubmissionById.call(request.userId, submissionId)
+
+  }
+
 
   async newUserRegistration(request: IRequest): Promise<User | null> {
     type UserCreationPayload = {
@@ -133,7 +147,8 @@ export default class UserController {
     return await this.findUserbyId.call(request.userId)
   }
 
-  async submitAnswer(request: IRequest): Promise<{ result: Submission, prevScores: User['scores'], newScores: User['scores'] }> {
+  async submitAnswer(request: IRequest):
+    Promise<{ submission_id: string }> {
     //TODO: Reading User unnecessary times, make more efficient.
     if (!request.userId) {
       throw new ValidationError("userId not present")
@@ -155,27 +170,30 @@ export default class UserController {
       await this.mcpNotifier.notify(request.mcpServerContext, 2, 6, "🟢 Found your User Profile! Submitting your solution!")
     }
     const result = await this.submitSolution.call(request.userId, body.problem_id, body.userInput, request.mcpServerContext)
-    if (!result) {
+    if (!result.submission_id) {
       throw new InternalServerError("Didn't get good response from solution submitter")
     }
-    if (typeof result?.submission?.approach_score !== "number" || typeof result?.submission?.edge_case_score !== "number") {
-      throw new InternalServerError("Recieved malformed data from model response")
-    }
-
-    if (this.mcpNotifier && request.mcpServerContext) {
-      await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Evaluvated your Solution! Getting your new Scores!")
-    }
-
-    if (this.mcpNotifier && request.mcpServerContext) {
-      await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Got your fresh scores!")
-    }
     return {
-      result: result.submission,
-      prevScores: result.prevScores,
-      newScores: result.newScores
+      submission_id: result.submission_id
     }
-  }
 
+    // if (typeof result?.submission?.approach_score !== "number" || typeof result?.submission?.edge_case_score !== "number") {
+    //   throw new InternalServerError("Recieved malformed data from model response")
+    // }
+    //
+    // if (this.mcpNotifier && request.mcpServerContext) {
+    //   await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Evaluvated your Solution! Getting your new Scores!")
+    // }
+    //
+    // if (this.mcpNotifier && request.mcpServerContext) {
+    //   await this.mcpNotifier.notify(request.mcpServerContext, 5, 6, "🟢 Got your fresh scores!")
+    // }
+    // return {
+    //   result: result.submission,
+    //   prevScores: result.prevScores,
+    //   newScores: result.newScores
+    // }
+  }
   async updateConsistencyScores(request: IRequest) {
     if (!request.userId) {
       throw new ValidationError("userId not present")

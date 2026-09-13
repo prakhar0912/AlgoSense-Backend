@@ -7,15 +7,29 @@ import type { IPaginated, ISubmissionDAO } from "../../interfaces/index.js";
 
 
 type DbClient = Pick<PoolClient, "query">;
-type SubmissionDifficulty = Submission["difficulty"];
-type SubmissionScoreView = Pick<Submission, "problem_id" | "difficulty" | "approach_score" | "edge_case_score" | "submitted_at">;
+type SubmissionDifficulty = Exclude<Submission["difficulty"], undefined>;
+type SubmissionStatus = Submission["status"]
+type SubmissionScoreView = Required<Pick<Submission, "problem_id" | "difficulty" | "approach_score" | "edge_case_score" | "submitted_at">>;
 type SubmissionEdgeCaseImportance = "critical" | "high" | "medium" | "low";
 type SubmissionEdgeCaseCoverage = "correct" | "partial" | "incorrect" | "missing";
+
+
 type SubmissionEdgeCase = {
   description: string;
   importance: SubmissionEdgeCaseImportance;
   coverage: SubmissionEdgeCaseCoverage;
 };
+
+type InitialSubmissionRow = QueryResultRow & {
+  id: string;
+  user_id: string;
+  problem_id: string;
+  user_input: string;
+  hints_used: unknown;
+  submitted_at: string | Date | null;
+  status: string | null;
+  timer: number | string | null;
+}
 
 type SubmissionRow = QueryResultRow & {
   id: string;
@@ -35,6 +49,7 @@ type SubmissionRow = QueryResultRow & {
   edge_case_score: number | string | null;
   submitted_at: string | Date | null;
   elo_diff: number | string | null;
+  status: string | null;
 };
 
 type SubmissionScoreRow = QueryResultRow & {
@@ -48,6 +63,21 @@ type SubmissionScoreRow = QueryResultRow & {
 type SubmissionCountRow = QueryResultRow & {
   count: number | string;
 };
+
+type StatusRow = QueryResultRow & {
+  status: "pending" | "evaluating" | "completed"
+}
+
+const INITIAL_SUBMISSION_COLUMNS = [
+  "id",
+  "user_id",
+  "problem_id",
+  "user_input",
+  "hints_used",
+  "submitted_at",
+  "status",
+  "timer"
+] as const;
 
 const SUBMISSION_COLUMNS = [
   "id",
@@ -67,6 +97,7 @@ const SUBMISSION_COLUMNS = [
   "edge_case_score",
   "submitted_at",
   "elo_diff",
+  "status"
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -131,6 +162,24 @@ function toDifficulty(value: unknown): SubmissionDifficulty {
   }
 
   return "easy";
+}
+
+function toStatus(value: unknown): SubmissionStatus {
+  const normalized = typeof value === "string" ? value.trim() : String(value);
+
+  if (normalized === "pending") {
+    return "pending";
+  }
+
+  if (normalized === "evaluating") {
+    return "evaluating";
+  }
+
+  if (normalized === "completed") {
+    return "completed";
+  }
+
+  return "pending";
 }
 
 function toStringArray(value: unknown): string[] {
@@ -247,6 +296,10 @@ function buildSelectColumns(): string {
   return SUBMISSION_COLUMNS.join(", ");
 }
 
+function buildInitialSelectColumns(): string {
+  return INITIAL_SUBMISSION_COLUMNS.join(", ");
+}
+
 function normalizeSubmissionScoreRow(row: SubmissionScoreRow): SubmissionScoreView {
   return {
     problem_id: row.problem_id,
@@ -257,8 +310,24 @@ function normalizeSubmissionScoreRow(row: SubmissionScoreRow): SubmissionScoreVi
   };
 }
 
-function normalizeSubmissionRow(row: SubmissionRow): Submission {
+function normalizeInitialSubmissionRow(row: InitialSubmissionRow): Submission {
   const submission = new Submission();
+  const raw: Record<string, unknown> = isRecord(row) ? row : {};
+
+  submission.id = typeof raw.id === "string" ? raw.id : row.id;
+  submission.user_id = typeof raw.user_id === "string" ? raw.user_id : row.user_id;
+  submission.problem_id = typeof raw.problem_id === "string" ? raw.problem_id : row.problem_id;
+  submission.user_input = typeof raw.user_input === "string" ? raw.user_input : row.user_input;
+  submission.hints_used = toStringArray(raw.hints_used ?? row.hints_used);
+  submission.submitted_at = toIsoString(raw.submitted_at ?? row.submitted_at ?? new Date());
+  submission.status = toStatus(raw.status ?? row.status);
+  submission.timer = raw.timer === null || raw.timer === undefined ? null : toFiniteNumber(raw.timer);
+
+  return submission;
+}
+
+function normalizeSubmissionRow(row: SubmissionRow): Required<Submission> {
+  const submission: Required<Submission> = new Submission() as Required<Submission>;
   const raw: Record<string, unknown> = isRecord(row) ? row : {};
 
   submission.id = typeof raw.id === "string" ? raw.id : row.id;
@@ -278,6 +347,7 @@ function normalizeSubmissionRow(row: SubmissionRow): Submission {
   submission.edge_case_score = toFiniteNumber(raw.edge_case_score ?? row.edge_case_score);
   submission.submitted_at = toIsoString(raw.submitted_at ?? row.submitted_at ?? new Date());
   submission.elo_diff = toFiniteNumber(raw.elo_diff ?? row.elo_diff);
+  submission.status = toStatus(raw.status ?? row.status);
 
   return submission;
 }
@@ -285,7 +355,119 @@ function normalizeSubmissionRow(row: SubmissionRow): Submission {
 export default class SubmissionDAO implements ISubmissionDAO {
   constructor(private readonly db: DbClient = client) { }
 
-  async create(submissionPayload: Partial<Submission>): Promise<Submission> {
+  async createInitial(initialSubmissionPayload: Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used'>):
+    Promise<Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>> {
+    const query = `
+      INSERT INTO submissions (
+        user_id,
+        problem_id,
+        user_input,
+        hints_used,
+        status,
+        submitted_at,
+        timer
+      )
+      VALUES ($1, $2, $3, $4::varchar[], $5::submission_status, $6::varchar(30), $7)
+      RETURNING ${buildInitialSelectColumns()}
+    `;
+
+    const params = [
+      initialSubmissionPayload.user_id,
+      initialSubmissionPayload.problem_id,
+      initialSubmissionPayload.user_input,
+      initialSubmissionPayload.hints_used ?? [],
+      toStatus(initialSubmissionPayload.status),
+      initialSubmissionPayload.submitted_at ? toIsoString(initialSubmissionPayload.submitted_at) : new Date().toISOString(),
+      initialSubmissionPayload.timer ?? null,
+    ];
+
+    const result = await this.db.query<InitialSubmissionRow>(query, params);
+
+    if (result.rows[0]) {
+      return normalizeInitialSubmissionRow(result.rows[0]);
+    }
+
+    throw new Error("Initial Submission creation data didn't persist in the database");
+  }
+
+  async updateStatus(submissionId: string, status: SubmissionStatus):
+    Promise<Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>> {
+    console.log(status)
+    const result = await this.db.query<InitialSubmissionRow>(
+      `
+        UPDATE submissions 
+        SET status = $2::submission_status
+        WHERE id = $1
+        RETURNING ${buildInitialSelectColumns()}
+      `,
+      [submissionId, status],
+    )
+    console.log(result.rows[0])
+
+    if (result.rows[0]) {
+      return normalizeInitialSubmissionRow(result.rows[0]);
+    }
+
+    throw new Error("Submission Status update data didn't persist in the database");
+  }
+
+  async createFinalSubmission(submissionPayload: Partial<Submission>): Promise<Required<Submission>> {
+    const query = `
+      UPDATE submissions 
+      SET
+        problem_title = $1,
+        difficulty = $2::difficulty_enum,
+        problem_rating = $3::double precision,
+        approach_score = $4::smallint,
+        identified_approach = $5,
+        pass = $6,
+        missing_points = $7,
+        edge_cases = $8::jsonb[],
+        edge_case_score = $9::smallint,
+        submitted_at = $10::varchar(30),
+        elo_diff = $11::double precision,
+        status = $12::submission_status 
+      WHERE id = $13
+      RETURNING ${buildSelectColumns()}
+    `;
+
+    const params = [
+      submissionPayload.problem_title,
+      toDifficulty(submissionPayload.difficulty),
+      submissionPayload.problem_rating,
+      submissionPayload.approach_score,
+      submissionPayload.identified_approach ?? "",
+      submissionPayload.pass ?? false,
+      toMissingPointsValue(submissionPayload.missing_points),
+      toEdgeCaseArray(submissionPayload.edge_cases),
+      submissionPayload.edge_case_score,
+      submissionPayload.submitted_at ? toIsoString(submissionPayload.submitted_at) : new Date().toISOString(),
+      submissionPayload.elo_diff ?? 0,
+      submissionPayload.status ? toStatus(submissionPayload.status) : "completed",
+      submissionPayload.id
+    ];
+
+    const result = await this.db.query<SubmissionRow>(query, params);
+
+    if (result.rows[0]) {
+      return normalizeSubmissionRow(result.rows[0]);
+    }
+
+    throw new Error("Submission creation data didn't persist in the database");
+  }
+
+  async findById(userId: string, submissionId: string): Promise<Required<Submission> | null> {
+    const result = await this.db.query<SubmissionRow>(
+      `SELECT ${buildSelectColumns()} FROM submissions WHERE id = $1 AND user_id = $2 LIMIT 1`,
+      [submissionId, userId],
+    )
+
+    console.log(result.rows[0])
+    return result.rows[0] ? normalizeSubmissionRow(result.rows[0]) : null
+  }
+
+
+  async create(submissionPayload: Partial<Submission>): Promise<Required<Submission>> {
     const query = `
       INSERT INTO submissions (
         user_id,
@@ -378,12 +560,12 @@ export default class SubmissionDAO implements ISubmissionDAO {
             edge_case_score,
             submitted_at
           FROM submissions
-          WHERE user_id = $1
+          WHERE user_id = $1 AND status = $2 
           ORDER BY problem_id, approach_score DESC NULLS LAST, edge_case_score DESC NULLS LAST, submitted_at DESC NULLS LAST, id DESC
         ) best_submissions
         ORDER BY approach_score DESC NULLS LAST, edge_case_score DESC NULLS LAST, submitted_at DESC NULLS LAST, problem_id ASC
       `,
-      [userId],
+      [userId, "completed"],
     );
 
     return result.rows.map((row) => normalizeSubmissionScoreRow(row));

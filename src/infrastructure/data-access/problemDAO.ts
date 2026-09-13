@@ -41,6 +41,10 @@ type PublicProblemRow = QueryResultRow & {
   difficulty: number | string
 }
 
+type ExistsRow = QueryResultRow & {
+  exists: Boolean
+}
+
 type PublicFilterableProblemColumn = keyof Pick<
   Problem,
   | "id"
@@ -287,6 +291,10 @@ function toApproachArray(value: unknown): Problem["approaches"] {
   }
 
   return value.map((item) => normalizeApproach(item)).filter((item): item is ProblemApproach => item !== null)
+}
+
+function normalizeExistsRow(row: ExistsRow): Boolean {
+  return row.exists
 }
 
 function normalizeProblemRow(row: ProblemRow): Problem {
@@ -576,6 +584,15 @@ export default class ProblemDAO implements IProblemDAO {
         perPage,
       },
     }
+  }
+
+  async checkExistanceById(problemId: string): Promise<Boolean | null> {
+    const result = await this.db.query<ExistsRow>(
+      `SELECT EXISTS (SELECT 1 FROM problems WHERE id = $1)`,
+      [problemId],
+    )
+
+    return result.rows[0] ? normalizeExistsRow(result.rows[0]) : null
   }
 
   async findByIdForUsers(problemId: string): Promise<PublicProblem | null> {
