@@ -169,6 +169,7 @@ export default function registerUserTools(server: McpServer, authInfo: AuthInfo)
   )
 
 
+
   server.registerTool(
     'submit-solution',
     {
@@ -234,6 +235,37 @@ export default function registerUserTools(server: McpServer, authInfo: AuthInfo)
     },
   )
 
+  server.registerTool(
+    'check-submission',
+    {
+      title: "Check DSA Problem Submission Status",
+      description: 'Check the evaluation status of your submission',
+      inputSchema: z.object({
+        submission_id: z.string().transform((val) => sanitize(val)),
+      }),
+    },
+    async ({ submission_id }) => {
+      try {
+        const userId = authInfo.clientId
+        requireScope(authInfo, services.permissions.user.createSubmission)
+        if (userId === undefined) {
+          throw new UnauthorizedError('User ID is required')
+        }
+        const submissionId = submission_id
+        const result = await userController.getSubmission({ userId, params: { submissionId } })
+        return {
+          content: [{
+            type: 'text',
+            text: `Submitted Solution Evaluvation Status`,
+          }],
+          structuredContent: result
+        }
+      } catch (err) {
+        console.log(err)
+        throw new InternalServerError("Failed to check your submission status, please try again")
+      }
+    }
+  )
 
   server.registerTool(
     'delete-user-profile',

@@ -15,6 +15,7 @@ export class BullMqQueue<T> implements IJobQueue<T> {
     if (!job.id) {
       throw new InternalServerError("Failed to submit the job to the job queue, without an error thrown")
     }
+
     return {
       id: job.id,
       body: job.data as T

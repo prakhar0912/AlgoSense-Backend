@@ -1344,6 +1344,298 @@
 
 
     /* =====================================================
+       EVALUATION STATUS + LOADING STATE
+       ===================================================== */
+
+    .evaluation-status {
+      display: grid;
+
+      grid-template-columns: auto minmax(0, 1fr);
+
+      gap: 12px;
+
+      align-items: center;
+
+      min-height: 82px;
+
+      padding: 14px 17px;
+
+      border-radius: var(--radius);
+
+      background: var(--surface);
+
+      box-shadow: var(--shadow);
+    }
+
+
+    .status-indicator {
+      display: grid;
+
+      place-items: center;
+
+      width: 42px;
+
+      height: 42px;
+
+      border-radius: 14px;
+
+      background: var(--surface);
+
+      box-shadow: var(--shadow-inset);
+    }
+
+
+    .status-dot {
+      width: 11px;
+
+      height: 11px;
+
+      border-radius: 50%;
+
+      background: var(--yellow);
+
+      box-shadow: 0 0 0 5px rgba(185, 132, 28, 0.14);
+    }
+
+
+    .evaluation-status.evaluating .status-dot {
+      background: var(--blue);
+
+      box-shadow: 0 0 0 5px rgba(77, 127, 186, 0.14);
+
+      animation: status-pulse 1.5s ease-in-out infinite;
+    }
+
+
+    .evaluation-status.completed .status-dot {
+      background: var(--green);
+
+      box-shadow: 0 0 0 5px rgba(63, 154, 105, 0.14);
+    }
+
+
+    .evaluation-status.failed .status-dot {
+      background: var(--red);
+
+      box-shadow: 0 0 0 5px rgba(199, 91, 91, 0.14);
+    }
+
+
+    .status-copy {
+      min-width: 0;
+    }
+
+
+    .status-label {
+      margin-bottom: 3px;
+
+      color: var(--text-muted);
+
+      font-size: 8px;
+
+      font-weight: 800;
+
+      letter-spacing: 0.1em;
+
+      text-transform: uppercase;
+    }
+
+
+    .status-title {
+      color: var(--text);
+
+      font-size: 15px;
+
+      font-weight: 800;
+
+      line-height: 1.25;
+    }
+
+
+    .status-description {
+      margin-top: 3px;
+
+      color: var(--text-secondary);
+
+      font-size: 11px;
+
+      line-height: 1.4;
+    }
+
+
+    .status-badge.pending,
+    .status-badge.evaluating {
+      color: var(--blue);
+    }
+
+
+    .status-badge.completed {
+      color: var(--green);
+    }
+
+
+    .status-badge.failed {
+      color: var(--red);
+    }
+
+
+    .skeleton {
+      display: block;
+
+      overflow: hidden;
+
+      min-height: 1em;
+
+      border-radius: 999px;
+
+      background: linear-gradient(
+        100deg,
+        rgba(174, 182, 195, 0.20) 18%,
+        rgba(255, 255, 255, 0.72) 38%,
+        rgba(174, 182, 195, 0.20) 58%
+      );
+
+      background-size: 220% 100%;
+
+      animation: wave 1.7s linear infinite;
+    }
+
+
+    .skeleton.title {
+      width: min(82%, 430px);
+
+      height: 31px;
+
+      border-radius: 10px;
+    }
+
+
+    .skeleton.rating {
+      width: 118px;
+
+      height: 15px;
+    }
+
+
+    .skeleton.score {
+      width: 62%;
+
+      height: 20px;
+    }
+
+
+    .skeleton.line {
+      width: 100%;
+
+      height: 11px;
+
+      margin-bottom: 9px;
+    }
+
+
+    .skeleton.line.short {
+      width: 62%;
+
+      margin-bottom: 0;
+    }
+
+
+    .skeleton.text-block {
+      min-height: 72px;
+
+      padding: 14px;
+
+      border-radius: 13px;
+
+      background: var(--surface);
+
+      box-shadow: var(--shadow-inset);
+    }
+
+
+    .render-fade-in {
+      animation: content-reveal 260ms ease-out both;
+    }
+
+
+    .elo-hero {
+      display: flex;
+
+      align-items: center;
+
+      justify-content: space-between;
+
+      gap: 14px;
+
+      padding: 18px;
+
+      border-radius: 16px;
+
+      background: var(--surface);
+
+      box-shadow: var(--shadow-inset);
+    }
+
+
+    .elo-hero-label {
+      color: var(--text-muted);
+
+      font-size: 8px;
+
+      font-weight: 800;
+
+      letter-spacing: 0.1em;
+
+      text-transform: uppercase;
+    }
+
+
+    .elo-hero-copy {
+      margin-top: 5px;
+
+      color: var(--text-secondary);
+
+      font-size: 11px;
+    }
+
+
+    .elo-hero-value {
+      flex-shrink: 0;
+
+      font-size: clamp(27px, 8vw, 38px);
+
+      font-weight: 850;
+
+      letter-spacing: -0.05em;
+    }
+
+
+    @keyframes wave {
+      to {
+        background-position-x: -220%;
+      }
+    }
+
+
+    @keyframes status-pulse {
+      50% {
+        transform: scale(1.18);
+      }
+    }
+
+
+    @keyframes content-reveal {
+      from {
+        opacity: 0.65;
+      }
+
+      to {
+        opacity: 1;
+      }
+    }
+
+
+    /* =====================================================
        EMPTY
        ===================================================== */
 
@@ -1447,6 +1739,11 @@
       }
 
 
+      .evaluation-status {
+        padding: 17px 20px;
+      }
+
+
       summary {
         padding-left:
           25px;
@@ -1504,6 +1801,12 @@
       *::after {
         transition-duration:
           0.01ms !important;
+
+        animation-duration:
+          0.01ms !important;
+
+        animation-iteration-count:
+          1 !important;
       }
     }
   </style>
@@ -1537,14 +1840,13 @@
 
 
             <h1 class="page-title">
-              Evaluation
+              Submission evaluation
             </h1>
 
 
             <p class="page-subtitle">
-              Review the complete submission
-              and see exactly how the user's
-              scores changed.
+              Your result updates automatically while
+              the evaluation is in progress.
             </p>
 
           </div>
@@ -1552,6 +1854,25 @@
         </div>
 
       </header>
+
+
+      <section
+        id="evaluation-status"
+        class="evaluation-status pending"
+        aria-live="polite"
+      >
+        <div class="status-indicator" aria-hidden="true">
+          <span class="status-dot"></span>
+        </div>
+
+        <div class="status-copy">
+          <div class="status-label">Evaluation status</div>
+          <div class="status-title">Preparing your submission</div>
+          <div class="status-description">
+            Waiting for the evaluation to start.
+          </div>
+        </div>
+      </section>
 
 
       <!-- =================================================
@@ -1603,7 +1924,7 @@
 
 
           <h2 class="section-title">
-            Score Changes
+            Evaluation summary
           </h2>
 
         </div>
