@@ -6,7 +6,7 @@ import methodOverride from 'method-override'
 import routes from './routes/index.js'
 import type { IError } from '../../../interfaces/index.js'
 import { newUserRegistration, newLogin } from './middlewares/user.js'
-import auth from '../../utils/auth/auth0/auth.js'
+import authenticate from '../../utils/auth/auth0/auth.js'
 
 
 
@@ -31,7 +31,7 @@ app.get('/', async (_req: Request, res: express.Response) => {
 })
 
 
-app.use(auth)
+app.use(authenticate)
 app.use(newUserRegistration)
 app.use(newLogin)
 routes.attach(app)

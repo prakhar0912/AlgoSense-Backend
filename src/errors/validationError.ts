@@ -1,4 +1,4 @@
-import type IError from "../interfaces/error.js";
+import type { IError } from "../interfaces/error.js";
 
 export default class ValidationError extends Error implements IError {
   public name = 'ValidationError';

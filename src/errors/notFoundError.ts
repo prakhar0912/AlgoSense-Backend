@@ -1,4 +1,4 @@
-import type IError from "../interfaces/error.js";
+import type { IError } from "../interfaces/error.js";
 
 export default class NotFoundError extends Error implements IError {
     public name = 'NotFoundError';

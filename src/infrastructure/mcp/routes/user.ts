@@ -83,10 +83,7 @@ export default function registerUserTools(server: McpServer, authInfo: AuthInfo)
     async () => {
 
       const html = await fs.readFile(path.join(
-        "src",
-        "infrastructure",
-        "mcp",
-        "bundledHTML",
+        "dist-mcp-resources",
         "userProfile.html",
       ),
         "utf8",
@@ -147,10 +144,7 @@ export default function registerUserTools(server: McpServer, authInfo: AuthInfo)
     async () => {
 
       const html = await fs.readFile(path.join(
-        "src",
-        "infrastructure",
-        "mcp",
-        "bundledHTML",
+        "dist-mcp-resources",
         "userSubmissions.html",
       ),
         "utf8",
@@ -212,12 +206,8 @@ export default function registerUserTools(server: McpServer, authInfo: AuthInfo)
       mimeType: RESOURCE_MIME_TYPE,
     },
     async () => {
-
       const html = await fs.readFile(path.join(
-        "src",
-        "infrastructure",
-        "mcp",
-        "bundledHTML",
+        "dist-mcp-resources",
         "submittedSolution.html",
       ),
         "utf8",
