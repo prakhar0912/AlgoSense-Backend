@@ -30,7 +30,7 @@ The resource build script processes `submittedSolution`, `displayProblem`, `pagi
 
 Edit source templates and scripts, not generated HTML. Add new views to the build script's `pages` list and register matching MCP resources. Rebuild after UI changes; `npm run dev` watches the server but does not rebuild HTML. Build both outputs before deployment and package `dist-mcp-resources/` alongside `dist/`.
 
-`src/infrastructure/mcp/routes/user.ts` reads `dist-mcp-resources/*.html` relative to the process working directory, so run servers from the project root (or the equivalent application root in a container). Known migration gap: `src/infrastructure/mcp/routes/problem.ts` still reads the removed `src/infrastructure/mcp/bundledHTML/` directory; those resource paths need to be migrated to `dist-mcp-resources/` too.
+Both `src/infrastructure/mcp/routes/user.ts` and `src/infrastructure/mcp/routes/problem.ts` read `dist-mcp-resources/*.html` relative to the process working directory, so run servers from the project root (or the equivalent application root in a container).
 
 ## Authentication & Error Handling
 
