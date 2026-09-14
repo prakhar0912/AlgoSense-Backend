@@ -89,10 +89,7 @@ export default function registerProblemTools(server: McpServer, authInfo: AuthIn
     async () => {
 
       const html = await fs.readFile(path.join(
-        "src",
-        "infrastructure",
-        "mcp",
-        "bundledHTML",
+        "dist-mcp-resources",
         "paginatedProblem.html",
       ),
         "utf8",
@@ -162,10 +159,7 @@ export default function registerProblemTools(server: McpServer, authInfo: AuthIn
     async () => {
 
       const html = await fs.readFile(path.join(
-        "src",
-        "infrastructure",
-        "mcp",
-        "bundledHTML",
+        "dist-mcp-resources",
         "displayProblem.html",
       ),
         "utf8",
@@ -227,10 +221,7 @@ export default function registerProblemTools(server: McpServer, authInfo: AuthIn
     async () => {
 
       const html = await fs.readFile(path.join(
-        "src",
-        "infrastructure",
-        "mcp",
-        "bundledHTML",
+        "dist-mcp-resources",
         "displayProblem.html",
       ),
         "utf8",
@@ -247,6 +238,4 @@ export default function registerProblemTools(server: McpServer, authInfo: AuthIn
       };
     },
   );
-
-
 }
