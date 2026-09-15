@@ -9,7 +9,7 @@ export interface ISubmissionDAO {
   viewByUser(userId: string): Promise<IPaginated<Submission>>;
   viewScoresByUser(userId: string): Promise<Pick<Required<Submission>, 'problem_id' | 'difficulty' | 'approach_score' | 'edge_case_score' | 'submitted_at'>[]>;
   viewNumberOfSubmissionsPerUserPerProblem(userId: string, problemId: string): Promise<number> // Find and return the number of rows/entries from the "submissions" table, for a specific "user_id" provided as the argument "userId" and a specific "problem_id" provided as the argument "problemId". 
-  updateStatus(submissionId: string, status: Submission['status']): Promise<Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>>
+  updateStatus(submissionId: string, status: Submission['status']): Promise<null | Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>>
 }
 
 // id uuid NOT NULL DEFAULT uuidv7(),

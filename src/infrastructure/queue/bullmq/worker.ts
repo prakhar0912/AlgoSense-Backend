@@ -1,4 +1,5 @@
-import { Worker } from "bullmq"
+import { UnrecoverableError, Worker } from "bullmq"
+import keys from "../../../config/app.js"
 import services from "../../../config/services.js"
 import { Problem, ShortSubmission, Submission, User, UserScores } from "../../../entities/index.js"
 import { InternalServerError, NotFoundError, UnauthorizedError } from "../../../errors/index.js"
@@ -6,82 +7,115 @@ import type { ISubmissionDAO, IValidatorResult, ModelResponse } from "../../../i
 import { runInTransaction } from "../../data-access/client.js"
 
 
+process.on("SIGTERM", async () => {
+  await worker.close()
+  process.exit(0)
+})
+
+function throwIfCancelled(signal?: AbortSignal): void {
+  if (!signal?.aborted) {
+    return
+  }
+
+  const message = typeof signal.reason === "string"
+    ? signal.reason
+    : "Cancelled permanently"
+
+  throw new UnrecoverableError(message)
+}
 
 export const worker = new Worker(
   'submission-evaluation-queue',
-  async (job) => {
+  async (job, token, signal) => {
+    throwIfCancelled(signal)
     const submissionDAOInstance = new services.submission.DAO()
+    const problemDAOInstance = new services.problem.DAO()
+
     let submissionId: string = job.data
     console.log("Worker Started on: ", submissionId)
-    let initialSubmission: Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>
+    let initialSubmission: null | Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>
     try {
       initialSubmission = await submissionDAOInstance.updateStatus(submissionId, "evaluating")
     }
     catch (e) {
-      throw new InternalServerError('Error while updating Submission from DB')
+      throw new InternalServerError('Error while updating Submission from DB or submission completed')
     }
+    if (!initialSubmission) {
+      return
+    }
+
+    throwIfCancelled(signal)
+
+    let problem: Problem | null
+    try {
+      problem = await problemDAOInstance.findById(initialSubmission.problem_id)
+    }
+    catch (e) {
+      throw new InternalServerError('Error while fetching problem from DB')
+    }
+    if (!problem) {
+      throw new NotFoundError('Problem not found in DB')
+    }
+    throwIfCancelled(signal)
+
+    let modelResp
+    try {
+      modelResp = await services.utils.askGPT(problem, initialSubmission.user_input, signal)
+    }
+    catch (e) {
+      throwIfCancelled(signal)
+
+      throw new InternalServerError('Error while fetching response from model', e)
+    }
+    throwIfCancelled(signal)
+
+    let validatedModelResp: IValidatorResult<ModelResponse>
+    try {
+      validatedModelResp = services.problem.validators.modelResponseValidator.validate(modelResp)
+    }
+    catch (e) {
+      throw new InternalServerError('Error while validating model response')
+    }
+
+    const { data, errors } = validatedModelResp
+    if (errors && errors.length > 0 || !data) {
+      throw new InternalServerError('The model responded incorrectly', errors)
+    }
+
+    let validatedData: ModelResponse = data
+    // console.log("Validated Model Response", validatedData)
+
+    let finalEdgeCaseData: Submission['edge_cases'] = []
+    let earned = 0
+    let max = 0
+
+    for (const edgeCase of validatedData.edge_cases) {
+      max += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
+      earned += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[edgeCase.coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
+
+      finalEdgeCaseData.push({
+        description: edgeCase.case,
+        coverage: edgeCase.coverage,
+        importance: edgeCase.importance,
+      } as never)
+    }
+
+    let edgeCaseScore = 100
+    if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
+      edgeCaseScore = Math.ceil((earned / max) * 100)
+    }
+
+    const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
+
+    throwIfCancelled(signal)
+
     await runInTransaction<void>(async (client) => {
+
+      throwIfCancelled(signal)
+
       const submissionDAO = new services.submission.DAO(client)
       const userDAO = new services.user.DAO(client)
-      const problemDAO = new services.problem.DAO(client)
 
-
-      let problem: Problem | null
-      try {
-        problem = await problemDAO.findById(initialSubmission.problem_id)
-      }
-      catch (e) {
-        throw new InternalServerError('Error while fetching problem from DB')
-      }
-      if (!problem) {
-        throw new NotFoundError('Problem not found in DB')
-      }
-
-      let modelResp
-      try {
-        modelResp = await services.utils.askGPT(problem, initialSubmission.user_input)
-      }
-      catch (e) {
-        throw new InternalServerError('Error while fetching response from model', e)
-      }
-
-      let validatedModelResp: IValidatorResult<ModelResponse>
-      try {
-        validatedModelResp = services.problem.validators.modelResponseValidator.validate(modelResp)
-      }
-      catch (e) {
-        throw new InternalServerError('Error while validating model response')
-      }
-
-      const { data, errors } = validatedModelResp
-      if (errors && errors.length > 0 || !data) {
-        throw new InternalServerError('The model responded incorrectly', errors)
-      }
-
-      let validatedData: ModelResponse = data
-      // console.log("Validated Model Response", validatedData)
-
-      let finalEdgeCaseData: Submission['edge_cases'] = []
-      let earned = 0
-      let max = 0
-
-      for (const edgeCase of validatedData.edge_cases) {
-        max += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights];
-        earned += services.weights.edgeCaseImportanceWeights[edgeCase.importance as keyof typeof services.weights.edgeCaseImportanceWeights] * services.weights.edgeCaseCoverageWeights[edgeCase.coverage as keyof typeof services.weights.edgeCaseCoverageWeights]
-
-        finalEdgeCaseData.push({
-          description: edgeCase.case,
-          coverage: edgeCase.coverage,
-          importance: edgeCase.importance,
-        } as never)
-      }
-
-      let edgeCaseScore = 100
-      if (max !== 0 && !Number.isNaN(earned) && !Number.isNaN(max)) {
-        edgeCaseScore = Math.ceil((earned / max) * 100)
-      }
-
-      const finalApproachScore = services.weights.approachScoreWeights[data['user_explanation_rating'] as keyof typeof services.weights.approachScoreWeights]
 
       let user: User | null
       try {
@@ -153,6 +187,7 @@ export const worker = new Worker(
         throw new InternalServerError('Failed to add submission to database', e)
       }
 
+      throwIfCancelled(signal)
       // console.log("Final Submission: ", submissionData)
 
       // console.log('Final User Scores: ', {
@@ -179,6 +214,7 @@ export const worker = new Worker(
 
       // console.log("Profile Updated Scores: ", updatedUserScores)
 
+      throwIfCancelled(signal)
 
       let last5submissions = user.last_5_submissions && Array.isArray(user.last_5_submissions) ? user.last_5_submissions : []
 
@@ -193,12 +229,13 @@ export const worker = new Worker(
       }
       // console.log("Updated Short Submissions: ", updatedShortSubmissions)
       console.log("Finished processing: ", submissionData.id)
+      throwIfCancelled(signal)
     })
   },
   {
     connection: {
-      host: 'localhost',
-      port: 6379
+      host: keys.redis.host,
+      port: keys.redis.port
     },
     concurrency: 5
   }

@@ -155,7 +155,7 @@ ${problem.evaluation_criteria.map(c => `  - ${c}`).join('\n')}`
   }
 }
 
-export default async (problem: Problem, userInput: string): Promise<ModelResponse> => {
+export default async (problem: Problem, userInput: string, signal?: AbortSignal): Promise<ModelResponse> => {
 
   let { systemPrompt, approachesStrings, edgeCases } = systemPromptCreator(problem)
   let models = ['nvidia/nemotron-3-super-120b-a12b:free', 'tencent/hy3:free', 'poolside/laguna-xs-2.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free']
@@ -194,6 +194,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
       Authorization: 'Bearer ' + keys.open_router_key,
       'Content-Type': 'application/json',
     },
+    signal: signal ?? null,
     body: JSON.stringify({
       model: models[0],
       messages: [
@@ -301,6 +302,7 @@ export default async (problem: Problem, userInput: string): Promise<ModelRespons
       Authorization: 'Bearer ' + keys.open_router_key,
       'Content-Type': 'application/json',
     },
+    signal: signal ?? null,
     body: JSON.stringify({
       model: models[0],
       messages: [

@@ -8,7 +8,7 @@ import type { AuthInfo } from '@modelcontextprotocol/server'
 import keys from '../../../../config/app.js'
 
 const issuer = new URL(keys.auth0.issuer_base_url)
-const audience = "http://localhost:3000/mcp"
+const audience = `http://${keys.mcp.resourceHost}:${keys.mcp.port}/mcp`
 
 const jwks = createRemoteJWKSet(
   new URL('.well-known/jwks.json', issuer),

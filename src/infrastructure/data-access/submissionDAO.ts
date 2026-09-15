@@ -391,24 +391,27 @@ export default class SubmissionDAO implements ISubmissionDAO {
   }
 
   async updateStatus(submissionId: string, status: SubmissionStatus):
-    Promise<Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>> {
+    Promise<null | Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>> {
     console.log(status)
     const result = await this.db.query<InitialSubmissionRow>(
       `
         UPDATE submissions 
         SET status = $2::submission_status
-        WHERE id = $1
+        WHERE id = $1 AND
+        (status = $3 OR status = $4)
         RETURNING ${buildInitialSelectColumns()}
       `,
-      [submissionId, status],
+      [submissionId, status, "pending", "evaluating"],
     )
     console.log(result.rows[0])
 
     if (result.rows[0]) {
       return normalizeInitialSubmissionRow(result.rows[0]);
     }
+    else {
+      return null
+    }
 
-    throw new Error("Submission Status update data didn't persist in the database");
   }
 
   async createFinalSubmission(submissionPayload: Partial<Submission>): Promise<Required<Submission>> {

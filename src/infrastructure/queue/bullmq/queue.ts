@@ -7,7 +7,7 @@ export class BullMqQueue<T> implements IJobQueue<T> {
   async addJob(jobName: string, entry: T): Promise<IJobDetails<T>> {
     let job
     try {
-      job = await this.bullmqQueue.add(jobName, entry)
+      job = await this.bullmqQueue.add(jobName, entry, { jobId: String(entry) })
     }
     catch (e) {
       throw new InternalServerError("Failed to submit the job to the job queue", e)

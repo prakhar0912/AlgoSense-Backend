@@ -14,7 +14,7 @@ import { getServer } from './server.js';
 
 
 const resourceServerUrl = new
-  URL('http://localhost:3000/mcp');
+  URL(`http://${config.mcp.resourceHost}:${config.mcp.port}/mcp`);
 
 const issuer = new URL(config.auth0.issuer_base_url);
 
@@ -30,7 +30,7 @@ const oauthMetadata: OAuthMetadata = {
 };
 
 const app = createMcpExpressApp({
-  allowedHosts: ['localhost', '127.0.0.1'],
+  allowedHosts: [config.mcp.resourceHost, '127.0.0.1'],
 });
 
 app.use(mcpAuthMetadataRouter({ oauthMetadata, resourceServerUrl }));

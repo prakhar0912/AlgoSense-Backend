@@ -2,58 +2,56 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Commands
+## Project Structure & Architecture
 
-- **Run tests**: `npm test` (uses `--experimental-vm-modules` + Jest with ts-jest ESM preset)
-- **Run a single test file**: `npx jest path/to/test.ts` (e.g. `npx jest src/use-cases/user/tests/register.test.ts`)
-- **Type-check**: `npx tsc --noEmit`
-- **Build**: `npx tsc`
+- `src/entities/` contains domain models; `src/interfaces/` defines DAO, validator, use-case, queue, and notifier contracts.
+- `src/use-cases/user/` and `admin/` hold business logic; `src/controllers/` coordinates requests.
+- `src/infrastructure/` implements Express REST routes, MCP tools and HTML views, PostgreSQL access through `pg`, Zod validation, Auth0 authentication, and BullMQ queues.
+- `src/config/` supplies environment configuration, dependencies, permissions, and scoring weights. `src/server.ts` starts the servers.
+- MCP HTML templates and browser TypeScript live in `src/infrastructure/mcp/outputFormatters/`. `build-scripts/build-mcp-resources.mjs` uses `vite.config.ts` to generate self-contained HTML in ignored `dist-mcp-resources/`, separate from the compiled backend in `dist/`.
+- Tests sit beside their layers in `tests/`; k6 scripts live in `src/infrastructure/api/express/load-tests/`, with reports in `load-test-reports/`.
 
-## Tech Stack
+Submission requests create pending records and enqueue evaluation. The separate worker evaluates submissions and updates scores within database transactions. Preserve transaction boundaries and concurrency protections. Consult `user-rating-system.md` and `implementation-decisions.md` when changing scoring or persistence.
 
-- **Language**: TypeScript (ESM / NodeNext module resolution, `verbatimModuleSyntax`)
-- **Testing**: Jest 30 + ts-jest (ESM preset), `@jest/globals`
-- **Target**: Node.js (ESNext), output to `dist/`
-- **No web framework / No ORM** — pure use-case architecture with injected interfaces
+## Build, Test, and Development Commands
 
-## Architecture
+- `npm install`: install dependencies.
+- `npm run dev`: watch the REST server on port 3001 and MCP server on port 3000; load-testing mode disables MCP.
+- `npm run dev-worker`: watch the submission evaluation worker.
+- `npm run build`: compile `src/**/*.ts` into `dist/`; does not build MCP HTML resources.
+- `npx tsc --noEmit`: check source types; test files, the root Vite configuration, and build scripts are outside this check.
+- `npm run start`: run the compiled servers via `node dist/server.js` after building the backend and MCP resources.
+- `npm test`: run Jest with ESM support.
+- `npm test -- src/use-cases/user/tests/register.test.ts`: run one suite.
+- `npm run build-mcp-resources`: build all five MCP HTML views using `node build-scripts/build-mcp-resources.mjs`; replaces the old `build-mcp` command.
+- `npm run test-mcp`: launch the MCPJam inspector for manual MCP testing.
 
-Clean/use-case architecture with dependency injection. The four layers are independent:
+## MCP Resource Build & Runtime
 
-### src/entities/ — Domain models
-Plain TypeScript classes with `!` (definite assignment) for required fields:
-- [src/entities/user.ts](src/entities/user.ts) — `User` (role: 'admin' | 'user', banned, scores, submissions)
-- [src/entities/userScores.ts](src/entities/userScores.ts) — `UserScores` (approaches_score, consistency_score, edge_case_score, total_score, days_logged_in)
-- [src/entities/problem.ts](src/entities/problem.ts) — `Problem` (title, description, testCases, approaches[], evaluation_criteria, difficulty: 1|2.5|6|7)
-- [src/entities/submission.ts](src/entities/submission.ts) — `Submission` (user_id, problem_id, user_input, approach_score, edge_case_score, pass, etc.)
+The resource build script processes `submittedSolution`, `displayProblem`, `paginatedProblem`, `userProfile`, and `userSubmissions` sequentially. Each page name is passed as Vite's `mode` to select one HTML entry through `build.rolldownOptions.input`. `vite-plugin-singlefile` inlines JavaScript and CSS. Only the first build clears `dist-mcp-resources/`; subsequent builds preserve earlier pages. Keep the Vite output separate from `dist/` and use relative script paths in HTML because Vite's root is `src/infrastructure/mcp/outputFormatters/`.
 
-### src/interfaces/ — Contracts
-DAO interfaces and shared types:
-- [src/interfaces/user/userDAO.ts](src/interfaces/user/userDAO.ts) — `IUserDAO` (create, update, findForAuth, findByEmail, findById, findAll, toggleBanUser, setUserScores, etc.)
-- [src/interfaces/problem/problemDAO.ts](src/interfaces/problem/problemDAO.ts) — `IProblemDAO` (create, update, delete, findById, list, findByName)
-- [src/interfaces/submission/submissionDAO.ts](src/interfaces/submission/submissionDAO.ts) — `ISubmissionDAO` (create, viewById, viewByUser)
-- [src/interfaces/useCase.ts](src/interfaces/useCase.ts) — `IUseCase<T>` with `call(...args): Promise<T>`
-- [src/interfaces/validator.ts](src/interfaces/validator.ts) — `IValidator<T>` with `validate(body): IValidatorResult<T>`
-- [src/interfaces/request.ts](src/interfaces/request.ts) — `IRequest` (token, body, params)
-- [src/interfaces/error.ts](src/interfaces/error.ts) — `IError` (name, message, httpStatusCode, details)
-- [src/interfaces/paginated.ts](src/interfaces/paginated.ts) — `IPaginated<T>` (data[], pagination.page/perPage)
+Edit source templates and scripts, not generated HTML. Add new views to the build script's `pages` list and register matching MCP resources. Rebuild after UI changes; `npm run dev` watches the server but does not rebuild HTML. Build both outputs before deployment and package `dist-mcp-resources/` alongside `dist/`.
 
-### src/use-cases/ — Business logic
-Each use case implements `IUseCase<T>`, receives all dependencies via constructor injection:
-- [src/use-cases/user/](src/use-cases/user/) — register, login, authorize, submitSolution, updateConsistencyScore, updateUserScore, updatePassword, updateUserSettings, listProblems, getProblem, showProblem, getAllProblems, deleteUser
-- [src/use-cases/admin/](src/use-cases/admin/) — authorizeAdmin, createProblem, updateProblem, deleteProblem, listUsers, toggleBanUser, removeUser, updateUser
-- Tests live in [src/use-cases/user/tests/](src/use-cases/user/tests/)
+Both `src/infrastructure/mcp/routes/user.ts` and `src/infrastructure/mcp/routes/problem.ts` read `dist-mcp-resources/*.html` relative to the process working directory, so run servers from the project root (or the equivalent application root in a container).
 
-### src/errors/ — Domain error classes
-All implement `IError` with HTTP status codes:
-- `ValidationError` (400) — invalid input data
-- `UnauthorizedError` (401) — auth/token/permission failures
-- `NotFoundError` (404) — missing resources
-- `InternalServerError` (500) — unexpected failures (always wraps the underlying error)
+## Authentication & Error Handling
 
-## Patterns
+REST authentication uses the `authenticate` wrapper in `src/infrastructure/utils/auth/auth0/auth.ts`, mounted before registration/login middleware and protected routes. Preserve Auth0 audience, issuer, and RS256 validation. Successful authentication calls `next()`; recognized JWT authentication failures are forwarded with `next(new UnauthorizedError(...))` (domain HTTP 401), and unexpected failures use `InternalServerError` (HTTP 500). Let the centralized Express error handler serialize these domain errors. MCP authentication is handled separately in `mcpAuth.ts` and the MCP server setup.
 
-- **Error handling**: Every external call (DAO, injected function) wraps in try-catch → throws a domain error. Never let infrastructure errors propagate raw.
-- **Validation**: Input validation is delegated to an injected `IValidator<T>`. The use case checks `validationResult.success` and throws `ValidationError` with the error details array.
-- **Testing pattern**: All dependencies mocked with `jest.fn()`. Tests verify call ordering (`toHaveBeenCalledWith`), early-exit guards (ensure downstream functions NOT called on failure), and error wrapping (rejects `.toMatchObject` with the domain error class). Use `@jest/globals` imports.
-- **ESM**: All imports include `.js` extensions (TypeScript convention with `verbatimModuleSyntax` + NodeNext).
+Known auth handling gap: the installed library's `InsufficientScopeError` extends its `UnauthorizedError`. The current general check catches it before the dedicated insufficient-permission branch, so it currently receives the invalid/expired-token message and HTTP 401. Check specific subclasses before their parent when updating this mapping.
+
+## Coding Style & Naming Conventions
+
+Use strict TypeScript with NodeNext ESM, explicit type-only imports, and `.js` extensions for relative imports. Prefer two-space indentation and match surrounding quote/semicolon style; no formatter or linter is configured. Use camelCase filenames and functions, PascalCase classes, and existing snake_case domain fields. Inject dependencies through interfaces, validate input through validators, and wrap external failures in domain errors at use-case boundaries.
+
+## Testing Guidelines
+
+Use Jest 30, ts-jest, and `@jest/globals`. Name suites `*.test.ts`, with DAO suites distinguished as `*.unit.test.ts` or `*.integration.test.ts`. Mock dependencies for unit tests; verify guards, error wrapping, and downstream calls. No coverage threshold is configured. Integration suites use the configured PostgreSQL database and write fixtures; use a dedicated test database.
+
+For authentication changes, verify successful pass-through, known token/request failures, insufficient scope, and unexpected errors through the domain error handler. For MCP build or view changes, run `npm run build-mcp-resources`, verify all five HTML outputs, and check affected resources in the MCP inspector; backend type checking alone does not validate resource paths or HTML bundling.
+
+## Configuration & Contributions
+
+Keep secrets in ignored `.env`; consult `src/config/app.ts` for PostgreSQL, Auth0, and OpenRouter variables. `TEST_USERS_TOKENS` must contain valid JSON even outside load testing. BullMQ currently connects to Redis at `localhost:6379`.
+
+Recent commits use descriptive action phrases without enforced prefixes. Keep commits focused. PRs should explain behavior changes, link relevant issues, and report validation; include screenshots for MCP view changes.

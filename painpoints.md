@@ -39,3 +39,8 @@ We were fetching the user's data 3 times, reduced that to 1 time, that is the on
 
 
 Pivoting to a job queue for handling the long running AI evaluation.
+
+
+Using the submission ID as the BullMQ job ID.
+BullMQ generates a unique job ID for every call to `Queue.add` unless one is supplied. If the same submission is enqueued more than once, those entries would otherwise be treated as separate jobs and could be processed concurrently by different workers, causing the submission and user scores to be updated more than once.
+The submission ID already uniquely identifies the unit of evaluation, so using it as the job ID makes enqueueing that submission idempotent while the BullMQ job exists. Repeated enqueue attempts resolve to the same job instead of creating competing jobs for the same submission.

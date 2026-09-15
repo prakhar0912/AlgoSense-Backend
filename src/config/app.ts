@@ -8,7 +8,12 @@ const configExports = {
     port: Number(process.env.API_PORT),
   },
   mcp: {
+    resourceHost: String(process.env.MCP_RESOURCE_HOST),
     port: Number(process.env.MCP_PORT)
+  },
+  redis: {
+    host: String(process.env.REDIS_HOST),
+    port: Number(process.env.REDIS_PORT)
   },
   load_test_parameters: {
     load_testing: String(process.env.LOAD_TEST) === 'true' ? true : false,
