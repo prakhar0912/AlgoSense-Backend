@@ -10,3 +10,4 @@ export type { ISubmissionDAO } from "./submission/submissionDAO.js";
 export type { ILoginResponse } from "./user/loginResponse.js";
 export type { IUserDAO } from "./user/userDAO.js";
 export type { IJobQueue, IJobDetails } from "./jobQueue.js"
+export type { IHealthProbeState, IProbe, IProbeOptions } from "./healthProbe.js"

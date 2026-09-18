@@ -1,12 +1,12 @@
 //TODO: In all DAOs use the base entities as types to spot errors during entity definition changes easily
-import client from './client.js'
+import pool from './client.js'
 import type { PoolClient, QueryResultRow } from 'pg'
 
 import { ShortSubmission, User, UserScores } from '../../entities/index.js'
 import type { IPaginated, IUserDAO } from '../../interfaces/index.js'
 import services from '../../config/services.js'
 
-type DbClient = Pick<PoolClient, 'query'>
+type DbClient = Pick<PoolClient, "query">
 
 type UserRow = QueryResultRow & {
   id: string
@@ -346,7 +346,7 @@ function extractJsonPatch(value: unknown): JsonLike | null {
 }
 
 export default class UserDAO implements IUserDAO {
-  constructor(private readonly db: DbClient = client) { }
+  constructor(private readonly db: DbClient = pool) { }
 
   async create(userData: User) {
     const query = `

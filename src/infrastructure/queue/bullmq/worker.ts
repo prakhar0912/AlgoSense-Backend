@@ -1,21 +1,65 @@
 import { UnrecoverableError, Worker } from "bullmq"
+import express from 'express'
+import pool from "../../data-access/client.js"
 import keys from "../../../config/app.js"
 import services from "../../../config/services.js"
 import { Problem, ShortSubmission, Submission, User, UserScores } from "../../../entities/index.js"
 import { InternalServerError, NotFoundError, UnauthorizedError } from "../../../errors/index.js"
 import type { ISubmissionDAO, IValidatorResult, ModelResponse } from "../../../interfaces/index.js"
 import { runInTransaction } from "../../data-access/client.js"
+import { createWorkerProbe } from '../../health-probes/workerProbe.js'
 
+let shutdownStarted = false;
 
-process.on("SIGTERM", async () => {
-  await worker.close()
-  process.exit(0)
+async function shutdownWorker(failed = false): Promise<void> {
+  if (shutdownStarted) { return }
+
+  shutdownStarted = true
+  workerProbe.markShuttingDown()
+  let shutdownFailed = failed
+
+  try {
+    await worker.close()
+  } catch (error) {
+    shutdownFailed = true
+    console.error("Failed to close BullMQ worker", error)
+  } finally {
+    const dependencyResults = await Promise.allSettled([
+      pool.end(),
+      services.queue.evaluationQueue.close(),
+    ]);
+
+    for (const result of dependencyResults) {
+      if (result.status === "rejected") {
+        shutdownFailed = true
+        console.error(
+          "Failed to close a worker dependency", result.reason
+        )
+      }
+    }
+
+    // Keep health endpoints available while active jobs and dependencies drain.
+    try {
+      await closeWorkerHealthServer()
+    } catch (error) {
+      shutdownFailed = true
+      console.error('Failed to close worker health server', error)
+    }
+
+    process.exitCode = shutdownFailed ? 1 : 0
+  }
+}
+
+process.once("SIGTERM", () => {
+  void shutdownWorker()
+})
+
+process.once("SIGINT", () => {
+  void shutdownWorker()
 })
 
 function throwIfCancelled(signal?: AbortSignal): void {
-  if (!signal?.aborted) {
-    return
-  }
+  if (!signal?.aborted) { return }
 
   const message = typeof signal.reason === "string"
     ? signal.reason
@@ -41,7 +85,7 @@ export const worker = new Worker(
       throw new InternalServerError('Error while updating Submission from DB or submission completed')
     }
     if (!initialSubmission) {
-      return
+      throw new UnrecoverableError(`Submission no longer exists: ${submissionId}`)
     }
 
     throwIfCancelled(signal)
@@ -54,7 +98,7 @@ export const worker = new Worker(
       throw new InternalServerError('Error while fetching problem from DB')
     }
     if (!problem) {
-      throw new NotFoundError('Problem not found in DB')
+      throw new UnrecoverableError(`Problem no longer exists: ${initialSubmission.problem_id}`)
     }
     throwIfCancelled(signal)
 
@@ -64,7 +108,6 @@ export const worker = new Worker(
     }
     catch (e) {
       throwIfCancelled(signal)
-
       throw new InternalServerError('Error while fetching response from model', e)
     }
     throwIfCancelled(signal)
@@ -125,7 +168,7 @@ export const worker = new Worker(
         throw new InternalServerError('Unable to fetch user from DB.', e)
       }
       if (!user) {
-        throw new UnauthorizedError('AlgoSense account not found!')
+        throw new UnrecoverableError(`User ${initialSubmission.user_id} no longer exists.`)
       }
       const {
         mergedApproachScore,
@@ -240,6 +283,49 @@ export const worker = new Worker(
     concurrency: 5
   }
 )
+
+
+worker.on('error', (error) => {
+  console.error('BullMQ worker error', error)
+})
+
+const workerProbe = createWorkerProbe(worker)
+const workerHealthApp = express()
+workerProbe.attach(workerHealthApp)
+
+const workerHealthServer = workerHealthApp.listen(
+  keys.worker.healthPort,
+  '0.0.0.0',
+  (error?: Error) => {
+    if (error) {
+      console.error('Failed to start worker health server', error)
+      void shutdownWorker(true)
+      return
+    }
+    workerProbe.markStarted()
+    workerProbe.startMonitor()
+    console.log(`Worker health server listening on port ${keys.worker.healthPort}`)
+  },
+)
+
+function closeWorkerHealthServer(): Promise<void> {
+  if (!workerHealthServer.listening) { return Promise.resolve() }
+
+  return new Promise((resolve, reject) => {
+    workerHealthServer.close((error) => {
+      if (error) {
+        reject(error)
+        return
+      }
+      resolve()
+    })
+  })
+}
+
+
+
+
+
 
 
 function calculateRatingChange(problem: Problem, userEloRating: number, userScores: UserScores | null | undefined, finalApproachScore: number, edgeCaseScore: number, numberOfAttempts: number) {

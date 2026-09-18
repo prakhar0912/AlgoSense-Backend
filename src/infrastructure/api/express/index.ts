@@ -7,15 +7,18 @@ import routes from './routes/index.js'
 import type { IError } from '../../../interfaces/index.js'
 import { newUserRegistration, newLogin } from './middlewares/user.js'
 import authenticate from '../../utils/auth/auth0/auth.js'
-
+import restApiProbe from '../../health-probes/restApiProbe.js'
 
 
 
 const app: express.Application = express()
 
+
+
+restApiProbe.attach(app)
+
+
 app.use(logger('dev'))
-
-
 app.use(express.json())
 app.use(
   cors({

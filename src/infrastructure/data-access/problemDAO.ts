@@ -1,4 +1,4 @@
-import client from "./client.js"
+import pool from "./client.js"
 import type { PoolClient, QueryResultRow } from "pg"
 
 import { Problem } from "../../entities/index.js"
@@ -7,7 +7,6 @@ import type { IPaginated, IProblemDAO } from "../../interfaces/index.js"
 
 
 type DbClient = Pick<PoolClient, "query">
-
 type ProblemApproach = Problem["approaches"][number]
 type ProblemApproachEdgeCases = NonNullable<ProblemApproach["edge_cases"]>
 type ProblemApproachEdgeCase = ProblemApproachEdgeCases[number]
@@ -419,7 +418,7 @@ function buildPublicFilterClause(filters: Partial<PublicProblem>): { whereClause
 }
 
 export default class ProblemDAO implements IProblemDAO {
-  constructor(private readonly db: DbClient = client) { }
+  constructor(private readonly db: DbClient = pool) { }
 
   async create(problemData: Partial<Problem>): Promise<Problem> {
     const query = `

@@ -10,7 +10,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "build-mcp-resources": "node build-scripts/build-mcp-resources.mjs",
-    "dev-worker": "tsx watch src/infrastructure/queue/bullmq/worker.ts"
+    "dev-worker": "tsx watch src/infrastructure/queue/bullmq/worker.ts",
+    "start-worker": "node dist/infrastructure/queue/bullmq/worker.js"
   },
   "keywords": [],
   "author": "",

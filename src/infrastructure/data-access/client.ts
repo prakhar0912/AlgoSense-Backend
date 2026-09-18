@@ -9,17 +9,18 @@ const config = {
   password: keys.database.password,
   host: keys.database.host,
   database: keys.database.dbName,
-  port: keys.database.port
+  port: keys.database.port,
+  connectionTimeoutMillis: 2_000,
+  idleTimeoutMillis: 30_000,
+  max: 10
 }
 
 export const pool = new Pool(config)
 pool.on('error', (err: unknown) => {
-  console.log('Unexpected error oidle client', err)
-  process.exit(-1)
+  console.log('Unexpected error on idle client', err)
 })
 
-const client = await pool.connect()
-export default client
+export default pool
 
 export type TransactionClient =
   Pick<PoolClient, "query">

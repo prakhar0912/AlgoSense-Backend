@@ -1,4 +1,4 @@
-import client from "./client.js";
+import pool from "./client.js";
 import type { PoolClient, QueryResultRow } from "pg";
 
 import { Submission } from "../../entities/index.js";
@@ -6,7 +6,7 @@ import type { IPaginated, ISubmissionDAO } from "../../interfaces/index.js";
 
 
 
-type DbClient = Pick<PoolClient, "query">;
+type DbClient = Pick<PoolClient, "query">
 type SubmissionDifficulty = Exclude<Submission["difficulty"], undefined>;
 type SubmissionStatus = Submission["status"]
 type SubmissionScoreView = Required<Pick<Submission, "problem_id" | "difficulty" | "approach_score" | "edge_case_score" | "submitted_at">>;
@@ -353,7 +353,7 @@ function normalizeSubmissionRow(row: SubmissionRow): Required<Submission> {
 }
 
 export default class SubmissionDAO implements ISubmissionDAO {
-  constructor(private readonly db: DbClient = client) { }
+  constructor(private readonly db: DbClient = pool) { }
 
   async createInitial(initialSubmissionPayload: Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used'>):
     Promise<Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>> {

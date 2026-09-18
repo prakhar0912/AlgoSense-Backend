@@ -15,7 +15,7 @@ Submission requests create pending records and enqueue evaluation. The separate 
 
 - `npm install`: install dependencies.
 - `npm run dev`: watch the REST server on port 3001 and MCP server on port 3000; load-testing mode disables MCP.
-- `npm run dev-worker`: watch the submission evaluation worker.
+- `npm run dev-worker`: watch the submission evaluation worker and its Express health server (`WORKER_HEALTH_PORT`, default 3002).
 - `npm run build`: compile `src/**/*.ts` into `dist/`; does not build MCP HTML resources.
 - `npx tsc --noEmit`: check source types; test files, the root Vite configuration, and build scripts are outside this check.
 - `npm run start`: run the compiled servers via `node dist/server.js` after building the backend and MCP resources.
@@ -31,6 +31,14 @@ The resource build script processes `submittedSolution`, `displayProblem`, `pagi
 Edit source templates and scripts, not generated HTML. Add new views to the build script's `pages` list and register matching MCP resources. Rebuild after UI changes; `npm run dev` watches the server but does not rebuild HTML. Build both outputs before deployment and package `dist-mcp-resources/` alongside `dist/`.
 
 Both `src/infrastructure/mcp/routes/user.ts` and `src/infrastructure/mcp/routes/problem.ts` read `dist-mcp-resources/*.html` relative to the process working directory, so run servers from the project root (or the equivalent application root in a container).
+
+## Health Probes & Shutdown
+
+`src/infrastructure/health-probes/probe.ts` provides a reusable `HealthProbe` with injected readiness checks and optional local readiness state. The REST instance in `restApiProbe.ts` is attached before authentication; the worker gets a separate instance from `workerProbe.ts` and a standalone unauthenticated Express app bound to `0.0.0.0` on `WORKER_HEALTH_PORT` (default 3002). The worker health app exposes only probe routes. Probe state and timers must not be shared between processes.
+
+Both apps expose `/startupz` (listener started), `/livez` (process responds), and `/readyz` (started, not shutting down, locally ready, and dependencies healthy). Startup and liveness do not depend on PostgreSQL or Redis. Dependency checks run every five seconds, prevent overlapping checks, catch dependency failures, and expire after fifteen seconds without a completed refresh. PostgreSQL checks bound pool acquisition and query time; failed query connections are discarded. REST readiness checks PostgreSQL and the producer queue. Worker readiness checks PostgreSQL, its own BullMQ main and blocking Redis connections, and whether the worker is running and not paused. Worker readiness reports status; it does not pause job consumption automatically.
+
+On SIGTERM/SIGINT, mark probes shutting down and stop their timers first. The API closes its HTTP listeners before closing the pool and producer queue. The worker awaits `worker.close()` before closing its pool and the producer queue imported through services, then closes its health listener. Keep PostgreSQL available until active worker jobs finish. Use `Promise.allSettled` for independent cleanup so one failure does not prevent other connections from closing.
 
 ## Authentication & Error Handling
 
@@ -50,6 +58,6 @@ For authentication changes, verify successful pass-through, known token/request 
 
 ## Configuration & Contributions
 
-Keep secrets in ignored `.env`; consult `src/config/app.ts` for PostgreSQL, Auth0, and OpenRouter variables. `TEST_USERS_TOKENS` must contain valid JSON even outside load testing. BullMQ currently connects to Redis at `localhost:6379`.
+Keep secrets in ignored `.env`; consult `src/config/app.ts` for PostgreSQL, Auth0, OpenRouter, and worker health-port variables. BullMQ uses `REDIS_HOST` and `REDIS_PORT` for its Redis connection.
 
 Recent commits use descriptive action phrases without enforced prefixes. Keep commits focused. PRs should explain behavior changes, link relevant issues, and report validation; include screenshots for MCP view changes.

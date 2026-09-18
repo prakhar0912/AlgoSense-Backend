@@ -147,14 +147,6 @@ export default function registerProblemTools(server: McpServer, authInfo: AuthIn
     {
       description: "Show the problem using it's ID interactively.",
       mimeType: RESOURCE_MIME_TYPE,
-      _meta: {
-        ui: {
-          csp: {
-            connectDomains: ['http://localhost:3000'],
-            resourceDomains: ['']
-          }
-        }
-      }
     },
     async () => {
 

@@ -10,11 +10,12 @@ import type { AuthInfo } from '@modelcontextprotocol/server';
 import config from '../../config/app.js';
 import { auth0McpTokenVerifier } from '../utils/auth/auth0/mcpAuth.js';
 import { getServer } from './server.js';
+import type { Express } from 'express';
 
 
 
 const resourceServerUrl = new
-  URL(`http://${config.mcp.resourceHost}:${config.mcp.port}/mcp`);
+  URL(config.mcp.publicUrl);
 
 const issuer = new URL(config.auth0.issuer_base_url);
 
@@ -29,7 +30,7 @@ const oauthMetadata: OAuthMetadata = {
   scopes_supported: ['openid', 'profile', 'email', 'mcp:connect'],
 };
 
-const app = createMcpExpressApp({
+const app: Express = createMcpExpressApp({
   allowedHosts: [config.mcp.resourceHost, '127.0.0.1'],
 });
 

@@ -7,7 +7,11 @@ const configExports = {
   api: {
     port: Number(process.env.API_PORT),
   },
+  worker: {
+    healthPort: Number(process.env.WORKER_HEALTH_PORT ?? 3002),
+  },
   mcp: {
+    publicUrl: String(process.env.MCP_PUBLIC_URL),
     resourceHost: String(process.env.MCP_RESOURCE_HOST),
     port: Number(process.env.MCP_PORT)
   },
@@ -21,7 +25,6 @@ const configExports = {
     domain: String(process.env.DOMAIN),
     clientSecret: String(process.env.CLIENTSECRET),
     test_users_passwords: String(process.env.TEST_USERS_PASSWORD),
-    test_users_tokens: JSON.parse(String(process.env.TEST_USERS_TOKENS))
   },
   env: process.env.NODE_ENV,
   open_router_key: process.env.OPEN_ROUTER_KEY,
