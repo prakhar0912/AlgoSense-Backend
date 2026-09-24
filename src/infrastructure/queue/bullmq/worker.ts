@@ -8,6 +8,7 @@ import { InternalServerError, NotFoundError, UnauthorizedError } from "../../../
 import type { ISubmissionDAO, IValidatorResult, ModelResponse } from "../../../interfaces/index.js"
 import { runInTransaction } from "../../data-access/client.js"
 import { createWorkerProbe } from '../../health-probes/workerProbe.js'
+import { OpenRouterError, OpenRouterRateLimitError } from "../../utils/logic/askGPT.js"
 
 let shutdownStarted = false;
 
@@ -85,7 +86,7 @@ export const worker = new Worker(
       throw new InternalServerError('Error while updating Submission from DB or submission completed')
     }
     if (!initialSubmission) {
-      throw new UnrecoverableError(`Submission no longer exists: ${submissionId}`)
+      return
     }
 
     throwIfCancelled(signal)
@@ -108,6 +109,20 @@ export const worker = new Worker(
     }
     catch (e) {
       throwIfCancelled(signal)
+      if (e instanceof OpenRouterRateLimitError) {
+        const delay = Math.max(1_000, e.retryAfterMs ?? 60_000)
+        await services.queue.evaluationQueue.rateLimit(delay)
+        if (job.attemptsStarted >= 20) {
+          throw new UnrecoverableError('OpenRouter remained rate-limited after repeated attempts')
+        }
+        throw Worker.RateLimitError()
+      }
+      if (e instanceof OpenRouterError) {
+        if (!e.retryable) {
+          throw new UnrecoverableError(e.message)
+        }
+        throw e
+      }
       throw new InternalServerError('Error while fetching response from model', e)
     }
     throwIfCancelled(signal)
@@ -276,17 +291,52 @@ export const worker = new Worker(
     })
   },
   {
+    autorun: false,
     connection: {
       host: keys.redis.host,
       port: keys.redis.port
     },
-    concurrency: 5
+    concurrency: 5,
+    limiter: {
+      max: 10,
+      duration: 60_000,
+    },
+    maxStartedAttempts: 20
   }
 )
+
+async function handleFailedJobs(submissionId: string, error: Error) {
+  let marked
+  try {
+    const submissionDAO = new services.submission.DAO()
+    marked = await submissionDAO.markFailed(submissionId, error.message)
+  }
+  catch (error) {
+    console.error(`Couldn't mark submission ${submissionId} as failed`, error)
+    return
+  }
+}
 
 
 worker.on('error', (error) => {
   console.error('BullMQ worker error', error)
+})
+
+worker.on('failed', (job, error) => {
+
+  if (!job) { return }
+
+  const configuredAttempts = job.opts.attempts ?? 1
+  const permanentlyFailed = error instanceof UnrecoverableError ||
+    error.name === 'UnrecoverableError' ||
+    job.attemptsMade >= configuredAttempts
+
+  if (!permanentlyFailed) {
+    console.warn(`Submission ${job.data} failed and will be retried. Attempts Made: ${job.attemptsMade}, Configured Attempts: ${configuredAttempts}, Error: ${error}`)
+    return
+  }
+
+  void handleFailedJobs(job.data, error)
 })
 
 const workerProbe = createWorkerProbe(worker)

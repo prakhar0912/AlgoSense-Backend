@@ -67,10 +67,16 @@ export class HealthProbe implements IProbe {
           return false
         }
       }))
-
+      const dependenciesReady = results.every(result => result)
       if (!this.state.shuttingDown) {
-        this.state.dependenciesReady = results.every(result => result)
+        this.state.dependenciesReady = dependenciesReady
         this.state.lastCheckedAt = Date.now()
+        try {
+          await this.options.onDependenciesChecked?.(dependenciesReady)
+        }
+        catch (error) {
+          console.error('Failed to sync dependency state', error)
+        }
       }
     } finally {
       this.checkInProgress = false

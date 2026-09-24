@@ -17,7 +17,9 @@ export class Submission {
   edge_case_score?: number
   submitted_at?: string
   elo_diff?: number
-  status!: "pending" | "evaluating" | "completed"
+  status!: "pending" | "evaluating" | "completed" | "failed"
+  failure_reason?: string
+  failed_at?: string
 }
 
 

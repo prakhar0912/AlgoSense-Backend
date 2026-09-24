@@ -50,6 +50,14 @@ type SubmissionRow = QueryResultRow & {
   submitted_at: string | Date | null;
   elo_diff: number | string | null;
   status: string | null;
+  failure_reason: string | null;
+  failed_at: string | null;
+};
+
+type FailedSubmissionRow = QueryResultRow & {
+  id: string;
+  failure_reason: string | null;
+  failed_at: string | null;
 };
 
 type SubmissionScoreRow = QueryResultRow & {
@@ -64,9 +72,6 @@ type SubmissionCountRow = QueryResultRow & {
   count: number | string;
 };
 
-type StatusRow = QueryResultRow & {
-  status: "pending" | "evaluating" | "completed"
-}
 
 const INITIAL_SUBMISSION_COLUMNS = [
   "id",
@@ -97,7 +102,9 @@ const SUBMISSION_COLUMNS = [
   "edge_case_score",
   "submitted_at",
   "elo_diff",
-  "status"
+  "status",
+  "failure_reason",
+  "failed_at"
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -177,6 +184,10 @@ function toStatus(value: unknown): SubmissionStatus {
 
   if (normalized === "completed") {
     return "completed";
+  }
+
+  if (normalized === "failed") {
+    return "failed";
   }
 
   return "pending";
@@ -348,6 +359,8 @@ function normalizeSubmissionRow(row: SubmissionRow): Required<Submission> {
   submission.submitted_at = toIsoString(raw.submitted_at ?? row.submitted_at ?? new Date());
   submission.elo_diff = toFiniteNumber(raw.elo_diff ?? row.elo_diff);
   submission.status = toStatus(raw.status ?? row.status);
+  submission.failure_reason = typeof raw.failure_reason === "string" ? raw.failure_reason : "";
+  submission.failed_at = typeof raw.failed_at === "string" ? raw.failed_at : "";
 
   return submission;
 }
@@ -412,6 +425,35 @@ export default class SubmissionDAO implements ISubmissionDAO {
       return null
     }
 
+  }
+
+  async markFailed(submissionId: string, failureReason: string):
+    Promise<null | Pick<Submission, 'id' | 'failure_reason' | 'failed_at'>> {
+    const failedAt = String(Date.now());
+    const result = await this.db.query<FailedSubmissionRow>(
+      `
+        UPDATE submissions
+        SET
+          status = $2::submission_status,
+          failure_reason = $3::varchar(5000),
+          failed_at = $4::varchar(100)
+        WHERE id = $1
+          AND status IN ($5::submission_status, $6::submission_status)
+        RETURNING id, failure_reason, failed_at
+      `,
+      [submissionId, "failed", failureReason, failedAt, "pending", "evaluating"],
+    );
+
+    const row = result.rows[0];
+    if (!row) {
+      return null;
+    }
+
+    return {
+      id: row.id,
+      failure_reason: row.failure_reason ?? failureReason,
+      failed_at: row.failed_at ?? failedAt,
+    };
   }
 
   async createFinalSubmission(submissionPayload: Partial<Submission>): Promise<Required<Submission>> {

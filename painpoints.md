@@ -98,3 +98,40 @@ async refreshDependencyCheck(): Promise<void> {
 ```
 
 Use `await` when later work depends on completion. Use `void` only when the operation is intentionally detached and owns its error handling.
+
+
+# Permanent failure persistence is best-effort
+
+When a BullMQ job exhausts its configured attempts or throws an `UnrecoverableError`, the worker's local `failed` event handler calls `submissionDAO.markFailed(...)`. This keeps PostgreSQL synchronized with BullMQ during normal operation, but the event handler is not a durable delivery mechanism.
+
+The BullMQ job can reach its final `failed` state while PostgreSQL is unavailable. In that case, `markFailed` throws, the handler logs the error, and nothing retries the database update. The worker process can also exit after BullMQ records the failure but before the local event handler finishes. BullMQ then contains the terminal failure while the submission row can remain `pending` or `evaluating` indefinitely.
+
+The durable solution is a reconciliation process that periodically reads retained failed jobs from BullMQ and repairs the corresponding submission state in PostgreSQL. For each failed job, it should:
+
+1. Read the submission ID from the job data and the failure reason from BullMQ.
+2. Call `markFailed` using a conditional database update that only changes submissions still in `pending` or `evaluating` state.
+3. Treat an already `failed` or `completed` submission as reconciled so repeated runs remain safe.
+4. Retry database errors with bounded backoff and report failures that continue beyond an operational threshold.
+
+The reconciler can run on a timer in a dedicated process or as a Kubernetes CronJob. If several instances can run concurrently, use a distributed lock or rely on the conditional, idempotent database update while accepting the extra duplicate reads. Failed BullMQ jobs must be retained long enough for reconciliation; removing them immediately would remove the durable record needed to repair PostgreSQL.
+
+The existing local `failed` handler should remain because it updates the submission quickly when PostgreSQL is healthy. Reconciliation provides the recovery path when that immediate update cannot complete. `QueueEvents` can centralize live failure notifications, but it does not replace reconciliation because a consumer can still be unavailable when an event occurs.
+
+
+# Submission creation and queue insertion are not atomic
+
+Submitting a solution currently writes the initial submission to PostgreSQL and then adds its evaluation job to BullMQ in Redis. These operations use independent systems and cannot participate in the same database transaction.
+
+If PostgreSQL commits the submission and Redis becomes unavailable before `Queue.add` succeeds, the request leaves behind a `pending` submission with no evaluation job. Retrying the API request may create another submission instead of enqueueing the original one. Adding the BullMQ job first only reverses the problem: a job could exist for a submission whose database transaction never committed.
+
+Use a transactional outbox to make the PostgreSQL portion atomic and make queue delivery retryable:
+
+1. In one PostgreSQL transaction, insert the pending submission and an outbox row describing an `evaluate-submission` event with the submission ID.
+2. Commit both rows together. Either both become visible or neither does.
+3. Run an outbox dispatcher that claims undispatched rows in batches, commonly with `FOR UPDATE SKIP LOCKED`, and adds each job to BullMQ.
+4. Use the submission ID as the BullMQ job ID so retrying delivery does not create concurrent duplicate jobs.
+5. Mark the outbox row as dispatched only after `Queue.add` succeeds. Retry failures with backoff and retain enough error information for monitoring.
+
+There is still a possible crash after `Queue.add` succeeds but before the dispatcher marks the outbox row as dispatched. On restart, the dispatcher sends the event again. The deterministic BullMQ job ID makes that retry idempotent while the job exists, and the worker's conditional submission-state updates provide an additional guard against reevaluating a completed submission.
+
+The dispatcher can run as a small long-lived process, alongside the API with appropriate concurrency control, or as a separate Kubernetes workload. The API can return once the submission and outbox row commit; queue delivery then continues independently during temporary Redis outages.

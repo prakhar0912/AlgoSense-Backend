@@ -10,6 +10,7 @@ export interface IHealthProbeState {
 export interface IProbeOptions {
   readinessChecks: ReadonlyArray<() => Promise<boolean>>
   isLocallyReady?: () => boolean
+  onDependenciesChecked?: (ready: boolean) => Promise<void> | void
   freshnessMs?: number
 }
 
