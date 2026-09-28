@@ -1,7 +1,6 @@
 import ZodValidator from "../validator.js";
 import { sanitize } from "isomorphic-dompurify";
 import z from 'zod'
-import { UserScores } from "../../../../entities/index.js";
 
 const updateUserValidator = z.object({
   first_name: z.string().trim().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)),
@@ -32,6 +31,7 @@ const updateUserValidator = z.object({
     edge_case_score: z.number().min(1).max(10),
     submitted_at: z.string().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)),
   }).partial().strict()).nullable(),
+  deleted_at: z.iso.datetime({ offset: true }).transform((value) => new Date(value).toISOString()).nullable()
 })
   .partial()
   .strict()

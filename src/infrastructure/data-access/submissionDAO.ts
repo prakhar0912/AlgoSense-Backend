@@ -405,7 +405,6 @@ export default class SubmissionDAO implements ISubmissionDAO {
 
   async updateStatus(submissionId: string, status: SubmissionStatus):
     Promise<null | Pick<Submission, 'status' | 'timer' | 'problem_id' | 'submitted_at' | 'user_id' | 'user_input' | 'hints_used' | 'id'>> {
-    console.log(status)
     const result = await this.db.query<InitialSubmissionRow>(
       `
         UPDATE submissions 
@@ -416,7 +415,6 @@ export default class SubmissionDAO implements ISubmissionDAO {
       `,
       [submissionId, status, "pending", "evaluating"],
     )
-    console.log(result.rows[0])
 
     if (result.rows[0]) {
       return normalizeInitialSubmissionRow(result.rows[0]);
@@ -512,57 +510,57 @@ export default class SubmissionDAO implements ISubmissionDAO {
   }
 
 
-  async create(submissionPayload: Partial<Submission>): Promise<Required<Submission>> {
-    const query = `
-      INSERT INTO submissions (
-        user_id,
-        problem_id,
-        problem_title,
-        difficulty,
-        problem_rating,
-        user_input,
-        hints_used,
-        timer,
-        approach_score,
-        identified_approach,
-        pass,
-        missing_points,
-        edge_cases,
-        edge_case_score,
-        submitted_at,
-        elo_diff
-      )
-      VALUES ($1, $2, $3, $4::difficulty_enum, $5::double precision, $6, $7::varchar[], $8::bigint, $9::smallint, $10, $11, $12, $13::jsonb[], $14::smallint, $15::varchar(30), $16::double precision)
-      RETURNING ${buildSelectColumns()}
-    `;
-
-    const params = [
-      submissionPayload.user_id,
-      submissionPayload.problem_id,
-      submissionPayload.problem_title,
-      toDifficulty(submissionPayload.difficulty),
-      submissionPayload.problem_rating,
-      submissionPayload.user_input,
-      submissionPayload.hints_used ?? [],
-      submissionPayload.timer ?? null,
-      submissionPayload.approach_score,
-      submissionPayload.identified_approach ?? "",
-      submissionPayload.pass ?? false,
-      toMissingPointsValue(submissionPayload.missing_points),
-      toEdgeCaseArray(submissionPayload.edge_cases),
-      submissionPayload.edge_case_score,
-      submissionPayload.submitted_at ? toIsoString(submissionPayload.submitted_at) : new Date().toISOString(),
-      submissionPayload.elo_diff ?? 0,
-    ];
-
-    const result = await this.db.query<SubmissionRow>(query, params);
-
-    if (result.rows[0]) {
-      return normalizeSubmissionRow(result.rows[0]);
-    }
-
-    throw new Error("Submission creation data didn't persist in the database");
-  }
+  // async create(submissionPayload: Partial<Submission>): Promise<Required<Submission>> {
+  //   const query = `
+  //     INSERT INTO submissions (
+  //       user_id,
+  //       problem_id,
+  //       problem_title,
+  //       difficulty,
+  //       problem_rating,
+  //       user_input,
+  //       hints_used,
+  //       timer,
+  //       approach_score,
+  //       identified_approach,
+  //       pass,
+  //       missing_points,
+  //       edge_cases,
+  //       edge_case_score,
+  //       submitted_at,
+  //       elo_diff
+  //     )
+  //     VALUES ($1, $2, $3, $4::difficulty_enum, $5::double precision, $6, $7::varchar[], $8::bigint, $9::smallint, $10, $11, $12, $13::jsonb[], $14::smallint, $15::varchar(30), $16::double precision)
+  //     RETURNING ${buildSelectColumns()}
+  //   `;
+  //
+  //   const params = [
+  //     submissionPayload.user_id,
+  //     submissionPayload.problem_id,
+  //     submissionPayload.problem_title,
+  //     toDifficulty(submissionPayload.difficulty),
+  //     submissionPayload.problem_rating,
+  //     submissionPayload.user_input,
+  //     submissionPayload.hints_used ?? [],
+  //     submissionPayload.timer ?? null,
+  //     submissionPayload.approach_score,
+  //     submissionPayload.identified_approach ?? "",
+  //     submissionPayload.pass ?? false,
+  //     toMissingPointsValue(submissionPayload.missing_points),
+  //     toEdgeCaseArray(submissionPayload.edge_cases),
+  //     submissionPayload.edge_case_score,
+  //     submissionPayload.submitted_at ? toIsoString(submissionPayload.submitted_at) : new Date().toISOString(),
+  //     submissionPayload.elo_diff ?? 0,
+  //   ];
+  //
+  //   const result = await this.db.query<SubmissionRow>(query, params);
+  //
+  //   if (result.rows[0]) {
+  //     return normalizeSubmissionRow(result.rows[0]);
+  //   }
+  //
+  //   throw new Error("Submission creation data didn't persist in the database");
+  // }
 
   async viewById(submissionId: string): Promise<Submission | null> {
     const result = await this.db.query<SubmissionRow>(

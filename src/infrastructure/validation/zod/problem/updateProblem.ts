@@ -28,7 +28,8 @@ const updateProblemValidatorForAdmin =
       pros: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
       cons: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)))
     }).partial()),
-    evaluation_criteria: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)))
+    evaluation_criteria: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
+    deleted_at: z.iso.datetime({ offset: true }).transform((value) => new Date(value).toISOString()).nullable()
   }).partial().strict()
 
 export default new ZodValidator(updateProblemValidatorForAdmin)

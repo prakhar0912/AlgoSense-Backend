@@ -26,7 +26,7 @@ export default class UpdateUserProfile implements IUseCase<User> {
 
     let updatedUserProfile: User
     try {
-      updatedUserProfile = await this.userDAO.update(userId, validationResult.data as Partial<Pick<User, | 'first_name' | 'last_name' | 'email_notifications_enabled'>>)
+      updatedUserProfile = await this.userDAO.updateSelfProfile(userId, validationResult.data as Partial<Pick<User, | 'first_name' | 'last_name' | 'email_notifications_enabled'>>)
     }
     catch (e) {
       throw new InternalServerError('Unable to update user profile', e)

@@ -30,7 +30,7 @@ const createProblemValidator = z.object({
     pros: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))).optional(),
     cons: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))).optional()
   })),
-  evaluation_criteria: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val)))
+  evaluation_criteria: z.array(z.string().trim().max(1000, "Must be less than 1000 characters").transform((val) => sanitize(val))),
 }).strict()
 
 export default new ZodValidator(createProblemValidator)

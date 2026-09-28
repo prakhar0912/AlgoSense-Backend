@@ -20,6 +20,7 @@ type UserRow = QueryResultRow & {
   last_5_submissions: unknown | null
   email_verified: boolean
   email_notifications_enabled: boolean
+  deleted_at: string | Date | null
 }
 
 type ScoreRow = QueryResultRow & {
@@ -48,6 +49,7 @@ const USER_COLUMNS = [
   'last_5_submissions',
   'email_verified',
   'email_notifications_enabled',
+  'deleted_at',
 ] as const
 
 const FILTERABLE_COLUMNS = new Set<keyof User>([
@@ -62,6 +64,7 @@ const FILTERABLE_COLUMNS = new Set<keyof User>([
   'last_5_submissions',
   'email_verified',
   'email_notifications_enabled',
+  'deleted_at',
 ])
 
 const UPDATABLE_COLUMNS = new Set<keyof User>([
@@ -75,6 +78,7 @@ const UPDATABLE_COLUMNS = new Set<keyof User>([
   'last_5_submissions',
   'email_verified',
   'email_notifications_enabled',
+  'deleted_at',
 ])
 
 const TOPIC_RATING_DEFAULTS = {
@@ -348,7 +352,7 @@ function extractJsonPatch(value: unknown): JsonLike | null {
 export default class UserDAO implements IUserDAO {
   constructor(private readonly db: DbClient = pool) { }
 
-  async create(userData: User) {
+  async create(userData: Omit<User, 'deleted_at'>) {
     const query = `
       INSERT INTO users (
         id,
@@ -361,9 +365,10 @@ export default class UserDAO implements IUserDAO {
         created_at,
         last_5_submissions,
         email_verified,
-        email_notifications_enabled
+        email_notifications_enabled,
+        deleted_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb[], $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9::jsonb[], $10, $11, $12)
       ON CONFLICT (id)
       DO UPDATE
       SET
@@ -385,6 +390,7 @@ export default class UserDAO implements IUserDAO {
       toShortSubmissionJsonArray(userData.last_5_submissions),
       userData.email_verified,
       userData.email_notifications_enabled,
+      null,
     ]
 
     const result = await this.db.query<UserRow>(query, params)
@@ -396,7 +402,7 @@ export default class UserDAO implements IUserDAO {
   }
 
   async update(userId: string, payload: Partial<User>) {
-    return this.updateUserRow(userId, payload)
+    return this.updateUserRow(userId, payload, true)
   }
 
   async updateSelfProfile(userId: string, payload: Partial<User>) {
@@ -405,8 +411,8 @@ export default class UserDAO implements IUserDAO {
 
   async delete(userId: string): Promise<boolean> {
     const result = await this.db.query(
-      'DELETE FROM users WHERE id = $1 RETURNING id',
-      [userId],
+      'UPDATE users SET deleted_at = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id',
+      [userId, new Date().toISOString()],
     )
 
     return result.rowCount === 1
@@ -418,7 +424,7 @@ export default class UserDAO implements IUserDAO {
 
   async findByIdForUpdate(userId: string): Promise<User | null> {
     const result = await this.db.query<UserRow>(
-      `SELECT ${buildSelectColumns()} FROM users WHERE id = $1 LIMIT 1 FOR UPDATE`,
+      `SELECT ${buildSelectColumns()} FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
       [userId],
     )
     return result.rows[0] ? this.mapUserRow(result.rows[0]) : null
@@ -482,7 +488,7 @@ export default class UserDAO implements IUserDAO {
   async setUserScores(userId: string, scores: Partial<UserScores>): Promise<UserScores> {
     const patch = extractJsonPatch(scores)
     if (!patch) {
-      const res = await this.getUserScores(userId)
+      const res = await this.getActiveUserScores(userId)
       if (!res) {
         throw new Error('Failed to persist the update data')
       }
@@ -497,7 +503,7 @@ export default class UserDAO implements IUserDAO {
           WHEN scores IS NULL THEN $2::jsonb
           ELSE scores || $2::jsonb
         END
-        WHERE id = $1
+        WHERE id = $1 AND deleted_at IS NULL
         RETURNING scores
       `,
       [userId, patch],
@@ -522,7 +528,7 @@ export default class UserDAO implements IUserDAO {
 
   async getUserSubmissions(userId: string): Promise<ShortSubmission[] | null> {
     const result = await this.db.query<Last5SubmissionsRow>(
-      'SELECT last_5_submissions FROM users WHERE id = $1 LIMIT 1',
+      'SELECT last_5_submissions FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
       [userId],
     )
 
@@ -540,7 +546,7 @@ export default class UserDAO implements IUserDAO {
 
   async getLast5Submissions(userId: string): Promise<ShortSubmission[] | null> {
     const result = await this.db.query<Last5SubmissionsRow>(
-      'SELECT last_5_submissions FROM users WHERE id = $1 LIMIT 1',
+      'SELECT last_5_submissions FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
       [userId],
     )
 
@@ -566,7 +572,7 @@ export default class UserDAO implements IUserDAO {
       `
         UPDATE users
         SET last_5_submissions = $2::jsonb[]
-        WHERE id = $1
+        WHERE id = $1 AND deleted_at IS NULL
         RETURNING last_5_submissions
       `,
       [userId, toShortSubmissionJsonArray(payload)],
@@ -598,7 +604,7 @@ export default class UserDAO implements IUserDAO {
       `
         UPDATE users
         SET email_notifications_enabled = $2
-        WHERE id = $1
+        WHERE id = $1 AND deleted_at IS NULL
         RETURNING email_notifications_enabled
       `,
       [userId, enable],
@@ -622,7 +628,7 @@ export default class UserDAO implements IUserDAO {
 
   private async findUserByColumn(column: 'id' | 'email', value: string): Promise<User | null> {
     const result = await this.db.query<UserRow>(
-      `SELECT ${buildSelectColumns()} FROM users WHERE ${column} = $1 LIMIT 1`,
+      `SELECT ${buildSelectColumns()} FROM users WHERE ${column} = $1 AND deleted_at IS NULL LIMIT 1`,
       [value],
     )
 
@@ -638,7 +644,7 @@ export default class UserDAO implements IUserDAO {
       `
         UPDATE users
         SET ${column} = $2
-        WHERE id = $1
+        WHERE id = $1 AND deleted_at IS NULL
         RETURNING ${buildSelectColumns()}
       `,
       [userId, value],
@@ -710,7 +716,7 @@ export default class UserDAO implements IUserDAO {
     }
   }
 
-  private async updateUserRow(userId: string, payload: Partial<User>): Promise<User> {
+  private async updateUserRow(userId: string, payload: Partial<User>, includeDeleted: boolean = false): Promise<User> {
     const setClauses: string[] = []
     const params: unknown[] = []
 
@@ -719,7 +725,7 @@ export default class UserDAO implements IUserDAO {
         continue
       }
 
-      if (!UPDATABLE_COLUMNS.has(rawKey as keyof User)) {
+      if (!UPDATABLE_COLUMNS.has(rawKey as keyof User) || (rawKey === 'deleted_at' && !includeDeleted)) {
         continue
       }
 
@@ -759,7 +765,9 @@ export default class UserDAO implements IUserDAO {
     }
 
     if (setClauses.length === 0) {
-      const res = await this.findById(userId)
+      const res = includeDeleted
+        ? await this.findUserByIdIncludingDeleted(userId)
+        : await this.findById(userId)
       if (!res) {
         throw new Error("Nothing to update, but couldn't find user profile")
       }
@@ -773,7 +781,7 @@ export default class UserDAO implements IUserDAO {
       `
         UPDATE users
         SET ${setClauses.join(', ')}
-        WHERE id = $${params.length}
+        WHERE id = $${params.length}${includeDeleted ? '' : ' AND deleted_at IS NULL'}
         RETURNING ${buildSelectColumns()}
       `,
       params,
@@ -799,6 +807,25 @@ export default class UserDAO implements IUserDAO {
     user.last_5_submissions = normalizeShortSubmissions(row.last_5_submissions)
     user.email_verified = row.email_verified
     user.email_notifications_enabled = row.email_notifications_enabled
+    user.deleted_at = row.deleted_at === null ? null : toIsoString(row.deleted_at)
     return user
+  }
+
+  private async findUserByIdIncludingDeleted(userId: string): Promise<User | null> {
+    const result = await this.db.query<UserRow>(
+      `SELECT ${buildSelectColumns()} FROM users WHERE id = $1 LIMIT 1`,
+      [userId],
+    )
+
+    return result.rows[0] ? this.mapUserRow(result.rows[0]) : null
+  }
+
+  private async getActiveUserScores(userId: string): Promise<UserScores | null> {
+    const result = await this.db.query<ScoreRow>(
+      'SELECT scores FROM users WHERE id = $1 AND deleted_at IS NULL LIMIT 1',
+      [userId],
+    )
+
+    return result.rows[0] ? normalizeScores(result.rows[0].scores) : null
   }
 }

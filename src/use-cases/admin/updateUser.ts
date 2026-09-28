@@ -38,7 +38,7 @@ export default class UpdateUser implements IUseCase<User> {
 
     let updatedUser: User
     try {
-      updatedUser = await this.userDAO.updateSelfProfile(userId, validatedUpdatedUser.data as Partial<User>)
+      updatedUser = await this.userDAO.update(userId, validatedUpdatedUser.data as Partial<User>)
     }
     catch (e) {
       throw new InternalServerError('Unable to update the problem to the DB', e)

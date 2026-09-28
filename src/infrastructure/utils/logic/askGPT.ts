@@ -75,13 +75,13 @@ async function requestOpenRouter(body: unknown, signal?: AbortSignal): Promise<O
         body: JSON.stringify(body),
         signal: signal ?? null,
       },
-    );
+    )
   }
   catch (error) {
     if (signal?.aborted) {
-      throw error;
+      throw error
     }
-    throw new OpenRouterError('Unable to connect to OpenRouter', true);
+    throw new OpenRouterError('Unable to connect to OpenRouter', true)
   }
 
   const rawBody = await response.text()
@@ -94,6 +94,7 @@ async function requestOpenRouter(body: unknown, signal?: AbortSignal): Promise<O
     }
   }
   catch {
+    console.log('hehe')
     // HTTP status classification below still applies when the body is malformed.
   }
 
@@ -103,6 +104,7 @@ async function requestOpenRouter(body: unknown, signal?: AbortSignal): Promise<O
     : response.status
 
   if (!response.ok || data?.error) {
+    console.error("Error: ", data?.error)
     const message = data?.error?.message ?? `OpenRouter request failed with status ${response.status}`
 
     if (bodyStatus === 429) {
@@ -143,6 +145,7 @@ async function requestOpenRouter(body: unknown, signal?: AbortSignal): Promise<O
 
 function parseCompletion<T>(response: OpenRouterResponse): T {
   const content = response.choices?.[0]?.message?.content
+  console.dir("Success: ", response)
 
   if (typeof content !== 'string') {
     throw new OpenRouterError(
@@ -323,7 +326,7 @@ ${problem.evaluation_criteria.map(c => `  - ${c}`).join('\n')}`
 export default async (problem: Problem, userInput: string, signal?: AbortSignal): Promise<ModelResponse> => {
 
   let { systemPrompt, approachesStrings, edgeCases } = systemPromptCreator(problem)
-  const models = [...new Set(['nvidia/nemotron-3-super-120b-a12b:free', 'tencent/hy3:free', 'poolside/laguna-xs-2.1:free', 'inclusionai/ling-3.0-flash:free', 'poolside/laguna-xs-2.1:free'])]
+  const models = [...new Set(['nvidia/nemotron-3-super-120b-a12b:free', 'tencent/hy3:free', 'poolside/laguna-xs-2.1:free'])]
 
   if (keys.load_test_parameters.load_testing) {
     console.log("in test")

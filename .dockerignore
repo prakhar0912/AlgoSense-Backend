@@ -1,0 +1,65 @@
+# Installed dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+
+# Local build outputs
+dist/
+dist-mcp-resources/
+coverage/
+load-test-reports/
+*.tsbuildinfo
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+.npmrc
+*.pem
+*.key
+*.crt
+
+# Version control
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Editor and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Agent and local tooling files
+.agents/
+.codex/
+CLAUDE.md
+AGENTS.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Tests and test configuration
+src/**/tests/
+src/**/*.test.ts
+jest.config.cjs
+
+# Development configuration
+nodemon.json
+
+# Project documentation and local notes
+README.md
+painpoints.md
+project_notes.md
+implementation-decisions.md
+user-rating-system.md
+Entities.txt
+
+# Docker Compose files are not needed inside the image
+docker-compose*.yml
+docker-compose*.yaml

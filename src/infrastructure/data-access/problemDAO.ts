@@ -24,6 +24,7 @@ type ProblemRow = QueryResultRow & {
   difficulty: number | string
   approaches: unknown
   evaluation_criteria: unknown
+  deleted_at: string | Date | null
 }
 
 type PublicProblem = Omit<Problem, "hints" | "evaluation_criteria" | "approaches">
@@ -38,6 +39,7 @@ type PublicProblemRow = QueryResultRow & {
   secondary_topics: unknown
   similar_problems: unknown
   difficulty: number | string
+  deleted_at: string | Date | null
 }
 
 type ExistsRow = QueryResultRow & {
@@ -71,6 +73,7 @@ type FilterableProblemColumn = keyof Pick<
   | "difficulty"
   | "approaches"
   | "evaluation_criteria"
+  | "deleted_at"
 >
 
 type UpdatableProblemColumn = keyof Pick<
@@ -86,6 +89,7 @@ type UpdatableProblemColumn = keyof Pick<
   | "difficulty"
   | "approaches"
   | "evaluation_criteria"
+  | "deleted_at"
 >
 
 const PROBLEM_COLUMNS = [
@@ -101,6 +105,7 @@ const PROBLEM_COLUMNS = [
   "difficulty",
   "approaches",
   "evaluation_criteria",
+  "deleted_at",
 ] as const
 
 const PUBLIC_PROBLEM_COLUMNS = [
@@ -113,6 +118,7 @@ const PUBLIC_PROBLEM_COLUMNS = [
   "secondary_topics",
   "similar_problems",
   "difficulty",
+  "deleted_at",
 ] as const
 
 const FILTERABLE_COLUMNS: ReadonlyMap<FilterableProblemColumn, string> = new Map([
@@ -128,6 +134,7 @@ const FILTERABLE_COLUMNS: ReadonlyMap<FilterableProblemColumn, string> = new Map
   ["difficulty", "difficulty"],
   ["approaches", "approaches"],
   ["evaluation_criteria", "evaluation_criteria"],
+  ["deleted_at", "deleted_at"],
 ])
 
 const PUBLIC_FILTERABLE_COLUMNS: ReadonlyMap<PublicFilterableProblemColumn, string> = new Map([
@@ -154,6 +161,7 @@ const UPDATABLE_COLUMNS: ReadonlyMap<UpdatableProblemColumn, string> = new Map([
   ["difficulty", "difficulty"],
   ["approaches", "approaches"],
   ["evaluation_criteria", "evaluation_criteria"],
+  ["deleted_at", "deleted_at"],
 ])
 
 function buildSelectColumns(): string {
@@ -311,6 +319,7 @@ function normalizeProblemRow(row: ProblemRow): Problem {
   problem.difficulty = toDifficulty(row.difficulty)
   problem.approaches = toApproachArray(row.approaches)
   problem.evaluation_criteria = toStringArray(row.evaluation_criteria)
+  problem.deleted_at = row.deleted_at === null ? null : toIsoString(row.deleted_at)
 
   return problem
 }
@@ -327,6 +336,7 @@ function normalizePublicProblemRow(row: PublicProblemRow): Problem {
   problem.secondary_topics = toStringArray(row.secondary_topics)
   problem.similar_problems = toStringArray(row.similar_problems)
   problem.difficulty = toDifficulty(row.difficulty)
+  problem.deleted_at = row.deleted_at === null ? null : toIsoString(row.deleted_at)
 
   Reflect.deleteProperty(problem, "hints")
   Reflect.deleteProperty(problem, "approaches")
@@ -337,6 +347,14 @@ function normalizePublicProblemRow(row: PublicProblemRow): Problem {
 
 function toDifficultyValue(value: unknown): Problem["difficulty"] {
   return toDifficulty(value)
+}
+
+function toIsoString(value: string | Date): string {
+  if (value instanceof Date) {
+    return value.toISOString()
+  }
+
+  return value
 }
 
 function buildProblemValueClause(column: keyof Problem, placeholder: string): string {
@@ -366,12 +384,12 @@ function buildProblemValueClause(column: keyof Problem, placeholder: string): st
 }
 
 function buildPublicFilterClause(filters: Partial<PublicProblem>): { whereClause: string; params: unknown[] } {
-  const clauses: string[] = []
+  const clauses: string[] = ["deleted_at IS NULL"]
   const params: unknown[] = []
 
   if (filters === undefined || filters === null) {
     return {
-      whereClause: "",
+      whereClause: `WHERE ${clauses[0]}`,
       params: [],
     }
   }
@@ -412,7 +430,7 @@ function buildPublicFilterClause(filters: Partial<PublicProblem>): { whereClause
   }
 
   return {
-    whereClause: clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "",
+    whereClause: `WHERE ${clauses.join(" AND ")}`,
     params,
   }
 }
@@ -433,9 +451,10 @@ export default class ProblemDAO implements IProblemDAO {
         similar_problems,
         difficulty,
         approaches,
-        evaluation_criteria
+        evaluation_criteria,
+        deleted_at
       )
-      VALUES ($1, $2, $3::double precision, $4, $5::varchar[], $6::varchar[], $7::varchar[], $8::varchar[], $9::difficulty_enum, $10::jsonb[], $11::varchar[])
+      VALUES ($1, $2, $3::double precision, $4, $5::varchar[], $6::varchar[], $7::varchar[], $8::varchar[], $9::difficulty_enum, $10::jsonb[], $11::varchar[], $12)
       RETURNING ${buildSelectColumns()}
     `
 
@@ -451,6 +470,7 @@ export default class ProblemDAO implements IProblemDAO {
       toDifficultyValue(problemData.difficulty),
       problemData.approaches ?? [],
       problemData.evaluation_criteria ?? [],
+      null,
     ]
 
     const result = await this.db.query<ProblemRow>(query, params)
@@ -511,11 +531,20 @@ export default class ProblemDAO implements IProblemDAO {
 
   async delete(problemId: string): Promise<boolean> {
     const result = await this.db.query(
-      "DELETE FROM problems WHERE id = $1 RETURNING id",
-      [problemId],
+      "UPDATE problems SET deleted_at = $2 WHERE id = $1 AND deleted_at IS NULL RETURNING id",
+      [problemId, new Date().toISOString()],
     )
 
     return result.rowCount === 1
+  }
+
+  async findByIdForSubmission(problemId: string): Promise<Problem | null> {
+    const result = await this.db.query<ProblemRow>(
+      `SELECT ${buildSelectColumns()} FROM problems WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
+      [problemId],
+    )
+
+    return result.rows[0] ? normalizeProblemRow(result.rows[0]) : null
   }
 
   async findById(problemId: string): Promise<Problem | null> {
@@ -554,7 +583,7 @@ export default class ProblemDAO implements IProblemDAO {
 
   async findByName(name: string): Promise<Problem | null> {
     const result = await this.db.query<ProblemRow>(
-      `SELECT ${buildSelectColumns()} FROM problems WHERE title = $1 LIMIT 1`,
+      `SELECT ${buildSelectColumns()} FROM problems WHERE title = $1 AND deleted_at IS NULL LIMIT 1`,
       [name],
     )
 
@@ -587,7 +616,7 @@ export default class ProblemDAO implements IProblemDAO {
 
   async checkExistanceById(problemId: string): Promise<Boolean | null> {
     const result = await this.db.query<ExistsRow>(
-      `SELECT EXISTS (SELECT 1 FROM problems WHERE id = $1)`,
+      `SELECT EXISTS (SELECT 1 FROM problems WHERE id = $1 AND deleted_at IS NULL)`,
       [problemId],
     )
 
@@ -596,7 +625,7 @@ export default class ProblemDAO implements IProblemDAO {
 
   async findByIdForUsers(problemId: string): Promise<PublicProblem | null> {
     const result = await this.db.query<PublicProblemRow>(
-      `SELECT ${buildPublicSelectColumns()} FROM problems WHERE id = $1 LIMIT 1`,
+      `SELECT ${buildPublicSelectColumns()} FROM problems WHERE id = $1 AND deleted_at IS NULL LIMIT 1`,
       [problemId],
     )
 
@@ -605,7 +634,7 @@ export default class ProblemDAO implements IProblemDAO {
 
   async findBySlugForUsers(problemSlug: string): Promise<PublicProblem | null> {
     const result = await this.db.query<PublicProblemRow>(
-      `SELECT ${buildPublicSelectColumns()} FROM problems WHERE slug = $1 LIMIT 1`,
+      `SELECT ${buildPublicSelectColumns()} FROM problems WHERE slug = $1 AND deleted_at IS NULL LIMIT 1`,
       [problemSlug],
     )
 
@@ -613,12 +642,12 @@ export default class ProblemDAO implements IProblemDAO {
   }
 
   async findBySlug(problemSlug: string): Promise<Problem | null> {
-    const result = await this.db.query<PublicProblemRow>(
+    const result = await this.db.query<ProblemRow>(
       `SELECT ${buildSelectColumns()} FROM problems WHERE slug = $1 LIMIT 1`,
       [problemSlug],
     )
 
-    return result.rows[0] ? normalizePublicProblemRow(result.rows[0]) : null
+    return result.rows[0] ? normalizeProblemRow(result.rows[0]) : null
   }
 
   private buildFilterClause(filters: Partial<Problem>): { whereClause: string; params: unknown[] } {

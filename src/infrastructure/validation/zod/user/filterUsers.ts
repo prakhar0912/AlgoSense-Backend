@@ -33,6 +33,7 @@ const filterUserValidator = z.object({
     submitted_at: z.string().max(100, "Must be less than 100 characters").transform((val) => sanitize(val)),
   }).partial().strict()).nullable(),
   created_at: z.string().trim().min(1, "Should be provided").max(50, "Should be at max 50 characters").transform((val) => sanitize(val)),
+  deleted_at: z.iso.datetime({ offset: true }).transform((value) => new Date(value).toISOString()).nullable()
 })
   .partial()
   .strict()

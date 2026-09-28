@@ -13,8 +13,8 @@ export class User {
   last_5_submissions?: ShortSubmission[] | null
   email_verified!: boolean
   email_notifications_enabled!: boolean
+  deleted_at!: string | null
 }
-// id uuid NOT NULL DEFAULT uuidv7(),
 // email character varying(100) COLLATE pg_catalog."default" NOT NULL,
 // first_name character varying(100) COLLATE pg_catalog."default" NOT NULL,
 // last_name character varying(100) COLLATE pg_catalog."default",
@@ -25,3 +25,7 @@ export class User {
 // email_verified boolean NOT NULL,
 // scores jsonb,
 // last_5_submissions jsonb[],
+// id character varying(100) COLLATE pg_catalog."default" NOT NULL,
+// deleted_at character varying(100) COLLATE pg_catalog."default",
+// CONSTRAINT users_pkey PRIMARY KEY (id),
+// CONSTRAINT "Unique Email" UNIQUE (email)

@@ -100,3 +100,31 @@ Moving from race condition imune SubmitSolution usecase to job queue architectur
 2. New architecture: The REST API now saves the submission to PostgreSQL with a pending status, adds a lightweight { submissionId } job to a queue such as Redis/BullMQ, and immediately returns the submissionId to the client. A separate AI worker consumes the job, loads the submission, calls the AI provider, validates the result, calculates scores, updates the submission, and performs the Elo transaction. The client polls GET /submissions/:id until the status becomes evaluated.
 
 3. Why it's better: The API remains fast and responsive regardless of AI latency, while the queue absorbs traffic spikes and allows you to control AI concurrency. Workers can retry failed AI requests and scale independently from the API. Most importantly, it gives you a reliable place to handle evaluation and transactional Elo updates, making the system more resilient, scalable, and much easier to load-test.
+
+## 2026-09-28: Use soft deletion for users and problems
+
+We are retaining user and problem rows when they are deleted and recording the deletion time in a nullable `deleted_at` column.
+
+### Why this decision
+
+- Submissions reference users and problems through foreign keys. Physically deleting either parent row would violate those relationships unless we also changed or deleted the related submissions.
+- Submission history must remain unchanged when a user or problem is deleted. Cascading deletion would destroy that history, while setting a foreign key to `NULL` would modify the submission rows and remove their original association.
+- Keeping the parent rows preserves referential integrity and allows historical submissions to continue resolving their original user and problem identifiers.
+- A timestamp records when deletion occurred and supports restoration by setting `deleted_at` back to `NULL`. It provides more useful audit information than a boolean deletion flag.
+
+### Why not hard deletion
+
+- `ON DELETE CASCADE` would remove submissions and their evaluation history.
+- `ON DELETE SET NULL` would change submission rows and require nullable foreign keys.
+- Removing the foreign-key constraints would permit hard deletion but leave dangling identifiers and move integrity enforcement into application code.
+- Restricting deletion would preserve integrity but would prevent users or problems with submissions from being removed from normal application use.
+
+### Practical implication for this project
+
+- User and problem delete operations update `deleted_at` instead of issuing `DELETE` statements.
+- User-facing reads, worker lookups, and writes for active records require `deleted_at IS NULL` so a deleted record behaves like a missing record.
+- Administrative methods that manage or inspect deleted records deliberately omit the active-record filter.
+- Administrators can restore a record by setting `deleted_at` to `NULL` through the validated update path.
+- New users and problems are created with `deleted_at` set to `NULL`.
+- Submission rows and their foreign keys remain unchanged when a user or problem is soft-deleted.
+- Partial indexes cover active-user and active-problem listing order so routine queries do not need to scan deleted records.

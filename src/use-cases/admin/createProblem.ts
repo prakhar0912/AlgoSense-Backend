@@ -5,10 +5,10 @@ import type { IValidator, IProblemDAO, IUseCase, IValidatorResult } from "../../
 export default class CreateProblem implements IUseCase<Problem> {
   constructor(
     private problemDAO: IProblemDAO,
-    private problemValidator: IValidator<Omit<Problem, 'id'>>
+    private problemValidator: IValidator<Omit<Problem, 'id' | 'deleted_at'>>
   ) { }
-  async call(payload: Omit<Problem, 'id'>): Promise<Problem> {
-    let validatedProblem: IValidatorResult<Omit<Problem, 'id'>>
+  async call(payload: Omit<Problem, 'id' | 'deleted_at'>): Promise<Problem> {
+    let validatedProblem: IValidatorResult<Omit<Problem, 'id' | 'deleted_at'>>
     try {
       validatedProblem = this.problemValidator.validate(payload)
     }

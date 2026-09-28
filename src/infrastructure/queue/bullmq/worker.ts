@@ -61,7 +61,7 @@ process.once("SIGINT", () => {
 
 function throwIfCancelled(signal?: AbortSignal): void {
   if (!signal?.aborted) { return }
-
+  console.log('abort signal recieved')
   const message = typeof signal.reason === "string"
     ? signal.reason
     : "Cancelled permanently"
@@ -93,7 +93,7 @@ export const worker = new Worker(
 
     let problem: Problem | null
     try {
-      problem = await problemDAOInstance.findById(initialSubmission.problem_id)
+      problem = await problemDAOInstance.findByIdForSubmission(initialSubmission.problem_id)
     }
     catch (e) {
       throw new InternalServerError('Error while fetching problem from DB')
@@ -307,6 +307,7 @@ export const worker = new Worker(
 
 async function handleFailedJobs(submissionId: string, error: Error) {
   let marked
+  console.log("Marking submission as failed: ", submissionId)
   try {
     const submissionDAO = new services.submission.DAO()
     marked = await submissionDAO.markFailed(submissionId, error.message)
@@ -332,7 +333,7 @@ worker.on('failed', (job, error) => {
     job.attemptsMade >= configuredAttempts
 
   if (!permanentlyFailed) {
-    console.warn(`Submission ${job.data} failed and will be retried. Attempts Made: ${job.attemptsMade}, Configured Attempts: ${configuredAttempts}, Error: ${error}`)
+    console.warn(`Submission ${job.data} failed and will be retried.\nAttempts Made: ${job.attemptsMade},\nConfigured Attempts: ${configuredAttempts},\nError: ${error}`)
     return
   }
 

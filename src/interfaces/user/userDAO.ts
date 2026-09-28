@@ -3,7 +3,7 @@ import type { IPaginated } from "../index.js"
 
 
 export interface IUserDAO {
-  create(userData: User): Promise<User>  // Store User data into the Users table in the db
+  create(userData: Omit<User, 'deleted_at'>): Promise<User>  // Store User data into the Users table in the db
   update(userId: string, payload: Partial<User>): Promise<User> // Update the user based on the userId in the Users table using the payload, it could update any field in the user row.
   updateSelfProfile(userId: string, payload: Partial<User>): Promise<User> //Update the Users information in the Users table based on userId
   delete(userId: string): Promise<boolean> //Delete User row in the Users table
@@ -19,3 +19,5 @@ export interface IUserDAO {
   updateUser(userId: string, payload: Partial<User>): Promise<User>, // Update the user based on the userId in the Users table using the payload, it could update any field in the user row.
   setSubmissionsInProfile(userId: string, payload: Partial<ShortSubmission[]>): Promise<ShortSubmission[]> // Overwrite last5submissions column for userId using payload in users tables.
 }
+
+

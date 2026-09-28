@@ -35,7 +35,7 @@ export function createWorkerProbe(worker: Worker): HealthProbe {
     if (consecutiveSuccesses >= 2 && needsStart) {
       await worker.resume()
       workerControlledByProbe = false
-      console.log('Worker resumed after dependencies recovered')
+      console.log('Worker resumed after dependencies checked')
     }
   }
 

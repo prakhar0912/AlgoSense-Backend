@@ -32,7 +32,7 @@ export default class ProblemController {
 
     // protected updateProblem: IUseCase<Problem>,
 
-    protected addProblemDataTypeValidator: IValidator<Omit<Problem, 'id'>>,
+    protected addProblemDataTypeValidator: IValidator<Omit<Problem, 'id' | 'deleted_at'>>,
     protected updateProblemDataTypeValidator: IValidator<OptionalWithUndefined<UpdateProblemPayload>>,
     protected filterProblemDataTypeValidator: IValidator<OptionalWithUndefined<Omit<Problem, 'hints' | 'approaches' | 'evaluation_criteria'>>>
   ) { }
@@ -128,7 +128,7 @@ export default class ProblemController {
 
     let validationResult
     try {
-      validationResult = this.addProblemDataTypeValidator.validate(request.body as Problem)
+      validationResult = this.addProblemDataTypeValidator.validate(request.body as Omit<Problem, 'id' | 'deleted_at'>)
     } catch (e) {
       throw new InternalServerError('Problem Data Validation Function Failed', e)
     }
@@ -136,7 +136,7 @@ export default class ProblemController {
       throw new ValidationError('Invalid Problem Data', validationResult.errors)
     }
 
-    const problem = await this.createProblem.call(validationResult.data as Problem)
+    const problem = await this.createProblem.call(validationResult.data as Omit<Problem, 'id' | 'deleted_at'>)
     return problem
 
   }
